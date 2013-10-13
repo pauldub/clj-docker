@@ -1,6 +1,6 @@
 (defproject docker "0.1.0-SNAPSHOT"
   :description "A work in progress docket API client"
-  :url "http://endou.fr/clojure/docker"
+  :url "https://github.com/pauldub/clj-docker"
   :license {:name "MIT License"
             :url "http://choosealicense.com/licenses/mit"}
   :dependencies [[org.clojure/clojure "1.5.1"]
