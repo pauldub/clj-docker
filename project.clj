@@ -5,6 +5,9 @@
             :url "http://choosealicense.com/licenses/mit"}
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.apache.commons/commons-compress "1.4.1"]
-                 [http-kit "2.1.5"]
-                 [aleph "0.3.0-rc2"]
-                 [cheshire "5.2.0"]])
+                 [http-kit "2.1.17"]
+                 [com.taoensso/timbre "3.1.2"]
+                 [slingshot "0.10.3"]
+                 [cheshire "5.2.0"]
+                 [me.raynes/fs "1.4.4"]]
+  :profiles {:dev {:dependencies [[midje "1.6.3"]]}})

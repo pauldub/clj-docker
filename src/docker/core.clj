@@ -1,22 +1,66 @@
 (ns docker.core
   (:require [org.httpkit.client :as http]
             [clojure.java.io :as io]
-            aleph.formats
-            [cheshire.core :refer :all])
+            [cheshire.core :refer :all]
+            [slingshot.slingshot :refer [throw+ try+]]
+            [taoensso.timbre :refer [debug warn error]])
   (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
                                                        TarArchiveOutputStream
                                                        TarArchiveEntry)))
-
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
-
 (def ^:dynamic *docker-host* "http://127.0.0.1:4243")
 
 (defn set-docker-host!
   [^java.lang.String host]
   (alter-var-root (var *docker-host*) (fn [_] host)))
+
+
+(defn make-client
+  ([url] (make-client url nil))
+  ([url client-opts]
+    (let [url_ (if (nil? (seq url))
+                 *docker-host*
+                 url)
+          default-client-opts {:user-agent "clj-docker (httpkit 2.1.17)"
+                               :keep-alive 30000
+                               :timeout 1000}]
+      {:url url_
+       :client-opts (merge default-client-opts client-opts)})))
+
+(defn do-request 
+  [client method path
+   & {:keys [query-params form-params as]
+     :or [query-params {}
+          form-params {}
+          as :text
+          callback #(%1)]}]
+  (let [user-request {:url (str (:url client) path)
+                      :method method
+                      :query-params query-params
+                      :form-params form-params}]
+    @(http/request 
+      (merge (:client-opts client) user-request))))
+
+(defn version [client]
+  (debug "reading docker version from " (:url client))
+  (let [{:keys [status body error]} (do-request client :get "/version")]
+    (case status
+      200 (parse-string body true)
+      500 (throw+ {:type ::server_error
+                   :status status
+                   :error error
+                   :message "Server didnt respond."})
+      (throw+ {:type ::unspecified_error
+               :status status
+               :message "Unspecified error. Probably got timeout exception."
+               :error error}))))
+
+#_(
+   (def docker (make-client "http://10.0.1.2:4243"))
+   (version docker)
+   )
+
+;; OLDSHIT ---------------------------------------
+(comment
 
 (defn rpc-get [url & [params]]
   (let [resp (http/get (str *docker-host* url) {:query-params params})]
@@ -178,3 +222,5 @@
   (rpc-get "/version"))
 
 (defn wait [] "TODO")
+
+) ;; end of comment
