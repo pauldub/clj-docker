@@ -1,62 +1,71 @@
 (ns docker.core
-  (:require [org.httpkit.client :as http]
-            [clojure.java.io :as io]
-            [cheshire.core :refer :all]
+  (:require [docker.client :as dc]
             [slingshot.slingshot :refer [throw+ try+]]
             [taoensso.timbre :refer [debug warn error]])
   (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
                                                        TarArchiveOutputStream
                                                        TarArchiveEntry)))
-(def ^:dynamic *docker-host* "http://127.0.0.1:4243")
 
-(defn set-docker-host!
-  [^java.lang.String host]
-  (alter-var-root (var *docker-host*) (fn [_] host)))
+(def exceptions {:server-error {:type ::server_error
+                                :status 500
+                                :message "Fatal error in Docker agent."}
+                 :unspecified  {:type ::unspecified_error
+                                :status 418
+                                :message "Unspecified error. Probably timeout exception due wrong URl."}})
 
-
-(defn make-client
-  ([url] (make-client url nil))
-  ([url client-opts]
-    (let [url_ (if (nil? (seq url))
-                 *docker-host*
-                 url)
-          default-client-opts {:user-agent "clj-docker (httpkit 2.1.17)"
-                               :keep-alive 30000
-                               :timeout 1000}]
-      {:url url_
-       :client-opts (merge default-client-opts client-opts)})))
-
-(defn do-request 
-  [client method path
-   & {:keys [query-params form-params as]
-     :or [query-params {}
-          form-params {}
-          as :text
-          callback #(%1)]}]
-  (let [user-request {:url (str (:url client) path)
-                      :method method
-                      :query-params query-params
-                      :form-params form-params}]
-    @(http/request 
-      (merge (:client-opts client) user-request))))
+(def make-client dc/make-client)
 
 (defn version [client]
-  (debug "reading docker version from " (:url client))
-  (let [{:keys [status body error]} (do-request client :get "/version")]
+  "Shows the docker version used on host.
+  Usage:
+    (def docker (make-client))
+    (version docker)"
+  (debug "reading docker version from " (:host client))
+  (let [{:keys [status body error]} (dc/rpc-get client "/version")]
     (case status
-      200 (parse-string body true)
-      500 (throw+ {:type ::server_error
-                   :status status
-                   :error error
-                   :message "Server didnt respond."})
-      (throw+ {:type ::unspecified_error
-               :status status
-               :message "Unspecified error. Probably got timeout exception."
-               :error error}))))
+      200 (dc/parse-json client body)
+      500 (throw+ (:server-error exceptions))
+      (throw+ (:unspecified exceptions)))))
+
+(defn events
+  "Gets events from dockers - when since is unspecified then returns events for last 10s
+  New! Works with docker(>0.9)
+  usage:
+    (events docker) ;; returns events from last 10 seconds
+    (events docker 10030300) ;; returns events since unix time;
+    (def now (-> (System/currentTimeMillis) (/ 1000) int)
+    (events docker (- now 10))"
+  ([client]
+    (let [timeago 10 ;; 10 seconds
+          current-epoch (-> (System/currentTimeMillis) (/ 1000) int)
+          since (- current-epoch timeago)]
+      (events client (- current-epoch since))))
+  ([client since]
+    (debug "reading events of docker from" (:url client))
+    (let [{:keys [status body error]} (dc/rpc-get client "/events"
+                                                         {:query-params {:since since}})]
+      (case status
+        200 (dc/parse-json client body)
+        500 (throw+ (:server-error exceptions))
+        (throw+ (:unspecified exceptions))))))
+
+(defn info [client]
+  "displays system-wide information
+  Usage:
+    (info docker)"
+  (let [{:keys [status body error]} (dc/rpc-get client "/info")]
+    (case status
+      200 (dc/parse-json client body)
+      500 (throw+ (:server-error exceptions))
+      (throw+ (:unspecified exceptions)))))
+
 
 #_(
    (def docker (make-client "http://10.0.1.2:4243"))
    (version docker)
+   (events docker)
+   (def since-epoch (int (/ (System/currentTimeMillis) 100)))
+   (events docker since-epoch)
    )
 
 ;; OLDSHIT ---------------------------------------
@@ -129,9 +138,6 @@
   
   )
 
-(defn commit [{:keys [container repository tag message author conf]}]
-  "TODO")
-
 (defn containers []
   (rpc-get "/containers/json"))
 
@@ -178,9 +184,6 @@
                      :as params}]
   (rpc-post "/images/create" {:fromSrc src :repo repository :tag tag}))
 
-(defn info []
-  (rpc-get "/info"))
-
 (defn insert [image url path]
   (rpc-post (str "/images/" image "/insert") {:url url :path path}))
 
@@ -217,10 +220,6 @@
   (rpc-post (str "/containers/" container "/stop")))
 
 (defn tag [] "TODO")
-
-(defn version []
-  (rpc-get "/version"))
-
 (defn wait [] "TODO")
 
 ) ;; end of comment
