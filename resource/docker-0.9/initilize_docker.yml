@@ -1,0 +1,5 @@
+---
+- hosts: docker
+  tasks:
+    - name: update package list
+      system: apt-get -y update

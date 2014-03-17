@@ -14,7 +14,7 @@
       image1 {:Id "x1"}
       image2 {:Id "x2"}]
     (fact "shows all images on docker's host."
-        (with-fake-http ["/images" (generate-string [image1 image2])]
+        (with-fake-http ["/images/json" (generate-string [image1 image2])]
           (let [images (show-all docker)]
             (count images) => 2
             (-> images first :Id) => "x1"

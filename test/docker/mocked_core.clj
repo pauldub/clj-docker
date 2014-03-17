@@ -46,3 +46,10 @@
       (with-fake-http [#"\/info" (generate-string info_item)]
         (info docker) => info_item))))
 
+(facts "/auth endpoint"
+  (fact "it authorizes users correctly"
+    (let [docker (make-client default-url)]
+      (with-fake-http [#"\/auth" "OK"]
+        (authorize docker) => true))))
+
+

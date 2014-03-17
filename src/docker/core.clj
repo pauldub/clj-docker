@@ -1,7 +1,8 @@
 (ns docker.core
   (:require [docker.client :as dc]
             [slingshot.slingshot :refer [throw+ try+]]
-            [taoensso.timbre :refer [debug warn error]])
+            [taoensso.timbre :refer [debug warn error] :as log]
+            [cheshire.core :refer [generate-string]])
   (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
                                                        TarArchiveOutputStream
                                                        TarArchiveEntry)))
@@ -59,6 +60,26 @@
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
+
+;;TODO: doesnt work with < v.0.9 --> fix?
+;;Tested with curl:
+;;curl --data "{\"username\":\"tauhotest\",\"password\":\"qwerty_test\",\"serveraddress\":\"https://index.docker.io/v1\"}" http://10.0.1.2:4243/auth -i -v -H "X-Docker-Registry-Version:\"1\""
+;;
+
+(defn authorize [client username password email]
+  (let [{:keys [status body error]
+         :as resp} (dc/rpc-post
+                      client "/auth"
+                      {:body (generate-string
+                                {:username username
+                                 :password password
+                                 :email email
+                                 :serveraddress (:index-url client)})})]
+    (cond status
+      200 true
+      (do
+        (log/error error " : " body)
+        false))))
 
 #_(
    (def docker (make-client "http://10.0.1.2:4243"))
