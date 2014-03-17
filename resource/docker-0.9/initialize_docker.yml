@@ -1,0 +1,48 @@
+---
+- hosts: docker
+  sudo: yes
+  tasks:
+    - name: include tasks for kernel update
+      include: update_kernel.yml
+      tags:
+        - kernel
+    - name: reboot system
+      shell: reboot
+      tags:
+        - kernel
+    - name: pause provision for 15seconds to allow to do restarts for new kernel
+      pause: seconds=15
+    - name: add apt key for docker
+      apt_key: url=http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x36A1D7869245C8950F966E92D8576A8BA88D21E9
+               state=present
+    - name: add docker into package repositories
+      shell: "echo deb http://get.docker.io/ubuntu docker main\
+      > /etc/apt/sources.list.d/docker.list"
+    - name: update package list
+      shell: apt-get -y update
+    - name: install lxc-docker
+      apt: pkg=lxc-docker state=latest
+    - name: install docker
+      shell: curl -s https://get.docker.io/ubuntu/ | sudo sh
+    - name: do test run for docker
+      command: docker version
+    - name: install nginx
+      include: install_nginx.yml
+      tags:
+        - nginx
+    - name: add www-data into dockers group
+      shell: usermod -a -G docker www-data
+      notify: restart docker
+    - name: add configuration
+      copy: src=nginx.conf
+            dest=/etc/nginx/sites-enabled/docker
+      notify: restart nginx
+      tags:
+        - nginx
+
+
+  handlers:
+    - name: restart nginx
+      service: name=nginx state=restarted
+    - name: restart docker
+      service: name=docker state=restarted

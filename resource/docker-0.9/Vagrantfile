@@ -24,7 +24,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
   # config.vm.network :private_network, ip: "192.168.33.10"
-  config.vm.network :private_network, ip: "10.0.1.2"
+  config.vm.network :private_network, ip: "10.0.100.2"
 
 
   # Create a public network, which generally matched to bridged network.
@@ -61,6 +61,17 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   # Do image provision with ANSIBLE
   config.vm.provision "ansible" do |ansible|
+    ansible.inventory_path = "inventory"
     ansible.playbook = "initialize_docker.yml"
+    ansible.host_key_checking = false
+    #running kernel_updates tasks is required just for installing process;
+    ansible.raw_arguments = ["--skip", "kernel"]
+
+    ansible.verbose= "vvvv"
+  end
+
+  #solve plugin conflict
+  if Vagrant.has_plugin?("vagrant-vbguest") then
+    config.vbguest.auto_update = false
   end
 end

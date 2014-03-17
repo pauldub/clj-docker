@@ -1,2 +1,2 @@
 [docker]
-10.0.1.2
+10.0.100.2 ansible_ssh_user=vagrant
