@@ -1,15 +1,16 @@
 (ns docker.client
   (:require [org.httpkit.client :as http]
-            [cheshire.core :refer [parse-string]]
+            [cheshire.core :as json]
+            [clojure.java.io :as io]
             [slingshot.slingshot :refer [throw+ try+]]
             [taoensso.timbre :refer (debug warn error)]))
-
 
 (defprotocol URLBuilder
   (to-url [this path] [this path query-params]))
 
 (defprotocol ResponseParser
-  (parse-json [this response]))
+  (parse-json [this response] "parses body of response text")
+  (parse-stream [this response] "parses stream of response and returns lazyseq"))
 
 (defprotocol RPC
   (rpc-get  [this path] [this path params] "makes HTTP/GET request")
@@ -58,9 +59,14 @@
               (:client-options this)
               request-map)))
   ResponseParser
-  (parse-json [this response]
+  (parse-json [this body]
     (try+
-      (parse-string response true)
+      (json/parse-string body true)
+      (catch Object _
+        (error (:throwable &throw-context)))))
+  (parse-stream [this body]
+    (try+
+      (json/parse-stream (io/reader body) true)
       (catch Object _
         (error (:throwable &throw-context))))))
 

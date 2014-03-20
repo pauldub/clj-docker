@@ -1,7 +1,7 @@
 (ns docker.image
   (:require [docker.client :as dc]
             [slingshot.slingshot :refer [throw+ try+]]
-            [taoensso.timbre :refer [debug warn error] :as log]
+            [taoensso.timbre :as log]
             [cheshire.core :refer [parse-string parse-stream]]
             [clojure.java.io :as io]))
 
@@ -16,13 +16,17 @@
                             :message "Image doesnt exist."}
                  :image-conflict {:type ::image_conflict
                                   :status 409
-                                  :message "Conflicts while removing images on the filesystem."}})
-
+                                  :message "Conflicts while "}})
 
 (defn show-all [client & {:keys [all] :or {all 0}}]
   "Lists all images on Docker host.
+  Arguments:
+    client  - the initialized client for docker API
+  Optional arguments:
+    :all    - limit for size of response
   Usage:
-    (show-all client)"
+    (show-all client)
+    (show-all client :all 10)"
   (let [params {:all all}
         {:keys [status body error]} (dc/rpc-get client "/images/json"
                                                 {:query-params params})]
@@ -53,13 +57,14 @@
                 :repo repo
                 :tag tag
                 :registry registry}
-        stream (dc/rpc-post client "/images/create"
-                                 {:query-params params, :as :stream})
-        status (:status @stream)]
-    (cond status
-      200 (parse-stream (io/reader (:body @stream)) true)
+        {:keys [status body]
+         :as resp} @(dc/stream-post client "/images/create"
+                                   {:query-params params})]
+    (case status
+      200 (dc/parse-stream client body)
       500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+      (throw+ (merge (:unspecified exceptions)
+                     {:response resp})))))
 
 (defn delete [client image-name & {:keys [force] :or {force false}}]
   "Remove image from filesystem
@@ -70,13 +75,139 @@
     :force - ignore possible errors while removing it, default false.
   Usage:
     (delete client \"registry\")"
-  (let [{:keys [status body]} (dc/rpc-delete client (str "/images/" image-name)
-                                             {:query-params {:force force}})]
-    (cond status
+  (let [{:keys [status body]
+         :as resp} (dc/rpc-delete client (str "/images/" image-name)
+                                         {:query-params {:force force}})]
+    (case status
       200 (dc/parse-json client body)
+      404 (throw+ (:no-image exceptions))
+      409 (throw+ (:image-conflict exceptions))
+      500 (throw+ (:server-error exceptions))
+      (throw+ (merge
+                (:unspecified exceptions)
+                (:response resp))))))
+
+(defn insert-file [client image url path]
+  "Inserts a file from the url in the image on the path.
+  Arguments:
+    client  - initialized client
+    image   - a name of docker image
+    url     - an url of the file
+    path    - an path to the image
+  Response:
+    a lazy-seq of parsed json-stream.
+  Usage:
+    (insert-file client \"http://s3.in/folder/file.exe\" \"/usr/shared\")"
+  (let [params {:url url, :path path}
+        {:keys [status body]
+         :as resp} @(dc/stream-post client
+                                    (str "/images/" image)
+                                    {:query-params params})]
+    (case status
+      200 (dc/parse-stream client body)
+      500 (throw+ (:server-error exceptions))
+      (throw+ (merge
+                (:unspecified exceptions)
+                (:response resp))))))
+
+(defn inspect [client image]
+  "Returns low-level information on the image name
+  Arguments:
+    client  - an initialized docker's client
+    image   - the name of image
+  Response:
+    plain Clojure map
+  Usage:
+    (inspect client \"lapax/tiny-haproxy\")"
+  (let [{:keys [status body]} (dc/rpc-get client
+                                          (str "/images/" image "/json"))]
+    (case status
+      200 (dc/parse-json client body)
+      404 (throw+ (:no-image exceptions))
+      500 (throw+ (:server-error exceptions))
+      (throw+ (:unspecified exceptions)))))
+
+(defn history [client image]
+  "Returns the history of the image
+  Arguments:
+    client  - the initialized client of docker
+    image   - the name of the image
+  Response:
+    a list of maps of history item
+  Usage:
+    (history client \"lapax/tiny-haproxy\")"
+  (let [{:keys [status body]} (dc/rpc-get client
+                                           (str "/images/" image "/history" ))]
+    (case status
+      200 (dc/parse-json client body)
+      404 (throw+ (:no-image exceptions))
+      500 (throw+ (:server-error exceptions))
+      (throw+ (:unspecified exceptions)))))
+
+(defn push [client image & {:keys [registry]}]
+  "Push the image on the registry
+  Arguments:
+    client  -  the initialized client for docker api
+    image   -  the name of the image
+  Optional arguments:
+    :registry - the url of your registry
+  Response:
+    a lazy-seq of a parsed json stream
+  Usage:
+    (push client \"lapax/tiny-haproxy\")
+    (push client \"lapax/tiny-haproxy\" :registry \"http://url\")"
+  (let [params {:registry registry}
+        {:keys [status body]} @(dc/stream-post client
+                                             (str "/images/" image "/push")
+                                             (when-not (nil? registry)
+                                               {:query-params params}))]
+    (case status
+      200 (dc/parse-stream client body)
+      404 (throw+ (:no-image exceptions))
+      500 (throw+ (:server-error exceptions))
+      (throw+ (:unspecified exceptions)))))
+
+(defn tag [client image & {:keys [repo force]
+                           :or {repo "default", force false}}]
+  "Tags the image into a repository
+  Arguments:
+    client  - the initialized client of docker
+    image   - the name of the image
+  Optional arguments:
+    :repo   - the repository to tag in
+    :force  - force the changes and ignore errors
+  Returns:
+    true if successful, otherwise raises exceptions
+  Usage:
+    (tag client \"base\" :repo \"default\")
+    (tag client \"base\" :repo \"default\" :force true)"
+  (let [params {:repo repo, :force force}
+        {:keys [status body]} (dc/rpc-get client
+                                          (str "/images/" image "/tag")
+                                          params)]
+    (case status
+      201 true
+      400 (throw+ (:bad-parameter exceptions))
       404 (throw+ (:no-image exceptions))
       409 (throw+ (:image-conflict exceptions))
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
+(defn search [client search-term]
+  "Searches for an image in the docker index.
+  Arguments:
+    client      -  the initialized client
+    search-term -  an search-term an image has to include
+  Returns:
+    a list with search results
+  Usage:
+    (search client \"sshd\")"
+  (let [params {:term search-term}
+        {:keys [status body]} (dc/rpc-get client
+                                          (str "/images/search")
+                                          {:query-params params})]
+    (case status
+      200 (dc/parse-json client body)
+      500 (throw+ (:server-error))
+      (throw+ (:unspecified exceptions)))))
 

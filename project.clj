@@ -9,6 +9,7 @@
                  [slingshot "0.10.3"]
                  [cheshire "5.2.0"]
                  [me.raynes/fs "1.4.4"]]
-  :plugins [[lein-shell "0.4.0"]]
+  :plugins [[lein-shell "0.4.0"]
+            [lein-midje "3.1.3"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [http-kit.fake "0.2.2"]]}})

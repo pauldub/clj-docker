@@ -50,6 +50,6 @@
   (fact "it authorizes users correctly"
     (let [docker (make-client default-url)]
       (with-fake-http [#"\/auth" "OK"]
-        (authorize docker) => true))))
+        (authorize docker "tauhotest" "qwerty_test" "info@tauho.com") => true))))
 
 

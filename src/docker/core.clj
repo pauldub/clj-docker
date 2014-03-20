@@ -61,7 +61,7 @@
       (throw+ (:unspecified exceptions)))))
 
 
-;;TODO: doesnt work with < v.0.9 --> fix?
+;;TODO: doesnt work with --> requires header even header exists, wrong value?
 ;;Tested with curl:
 ;;curl --data "{\"username\":\"tauhotest\",\"password\":\"qwerty_test\",\"serveraddress\":\"https://index.docker.io/v1\"}" http://10.0.1.2:4243/auth -i -v -H "X-Docker-Registry-Version:\"1\""
 ;;
@@ -75,8 +75,8 @@
                                  :password password
                                  :email email
                                  :serveraddress (:index-url client)})})]
-    (cond status
-      200 true
+    (if (= 200 status)
+      true
       (do
         (log/error error " : " body)
         false))))
@@ -90,6 +90,8 @@
    )
 
 ;; OLDSHIT ---------------------------------------
+;; aka which part is not yet refactored
+
 (comment
 
 (defn rpc-get [url & [params]]
@@ -190,29 +192,8 @@
 (defn export [container]
   (rpc-get-stream (str "/containers/" container "/export")))
 
-(defn history [image]
-  (rpc-get (str "/images/" image "/history")))
-
-(defn images [& {:keys [name quiet viz]
-                 :or {:name nil :quiet false :viz false}}]
-  (if (true? viz)
-    (rpc-get "/images/viz")
-    (rpc-get "/images/json" {:filter name :only_ids 0 :all 1})))
-
-
-(defn import-image [{:keys [src repository tag]
-                     :or {:repository nil :tag nil}
-                     :as params}]
-  (rpc-post "/images/create" {:fromSrc src :repo repository :tag tag}))
-
-(defn insert [image url path]
-  (rpc-post (str "/images/" image "/insert") {:url url :path path}))
-
 (defn inspect-container [container]
   (rpc-get (str "/containers/" container "/json")))
-
-(defn inspect-image [image]
-  (rpc-get (str "/images/" image "/json")))
 
 (defn kill [containers]
   (let [urls (map #(str "/containers/" %1 "/kill") containers)
@@ -220,27 +201,12 @@
     (doseq [resp futures]
       (println resp))))
 
-(defn login [{:keys [username password email]
-              :or {:password nil :email nil}
-              :as params}]
-  (rpc-post "/auth" params))
-
 (defn remove-container [container]
   (rpc-delete (str "/containers/" container)))
-
-(defn remove-image [image]
-  (rpc-delete (str "/images/" image)))
-
-(defn search [term]
-  (rpc-get "/images/search" {:term term}))
-
 (defn start [container & ports]
   (rpc-post (str "/containers/" container "/start") {:Binds ports}))
 
 (defn stop [container]
   (rpc-post (str "/containers/" container "/stop")))
-
-(defn tag [] "TODO")
-(defn wait [] "TODO")
 
 ) ;; end of comment
