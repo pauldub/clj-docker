@@ -18,7 +18,7 @@
                                   :status 409
                                   :message "Conflicts while "}})
 
-(defn show-all [client & {:keys [all] :or {all 0}}]
+(defn show-all
   "Lists all images on Docker host.
   Arguments:
     client  - the initialized client for docker API
@@ -27,6 +27,7 @@
   Usage:
     (show-all client)
     (show-all client :all 10)"
+  [client & {:keys [all] :or {all 0}}]
   (let [params {:all all}
         {:keys [status body error]} (dc/rpc-get client "/images/json"
                                                 {:query-params params})]
@@ -38,8 +39,7 @@
 
 ;;TODO: finish authorization
 ;;TODO: add support for from-src
-(defn create [client image
-              & {:keys [from-src repo tag registry]}]
+(defn create
   "Creates an new image, either by pull it from the registry or importing it from file.
   Arguments:
     client - initialized docker client
@@ -53,6 +53,7 @@
     (create client \"registry\")
     (create client \"registry\" :tag \"latest\")
   "
+  [client image & {:keys [from-src repo tag registry]}]
   (let [params {:fromImage image
                 :repo repo
                 :tag tag
@@ -66,7 +67,7 @@
       (throw+ (merge (:unspecified exceptions)
                      {:response resp})))))
 
-(defn delete [client image-name & {:keys [force] :or {force false}}]
+(defn delete
   "Remove image from filesystem
   Arguments:
     client - initialized docker client
@@ -75,6 +76,7 @@
     :force - ignore possible errors while removing it, default false.
   Usage:
     (delete client \"registry\")"
+  [client image-name & {:keys [force] :or {force false}}]
   (let [{:keys [status body]
          :as resp} (dc/rpc-delete client (str "/images/" image-name)
                                          {:query-params {:force force}})]
@@ -86,7 +88,7 @@
       (throw+ (merge (:unspecified exceptions) resp)))))
 
 
-(defn insert-file [client image url path]
+(defn insert-file
   "Inserts a file from the url in the image on the path.
   Arguments:
     client  - initialized client
@@ -97,6 +99,7 @@
     a lazy-seq of parsed json-stream.
   Usage:
     (insert-file client \"http://s3.in/folder/file.exe\" \"/usr/shared\")"
+  [client image url path]
   (let [params {:url url, :path path}
         {:keys [status body]
          :as resp} @(dc/stream-post client
@@ -109,7 +112,7 @@
                 (:unspecified exceptions)
                 (:response resp))))))
 
-(defn inspect [client image]
+(defn inspect
   "Returns low-level information on the image name
   Arguments:
     client  - an initialized docker's client
@@ -118,6 +121,7 @@
     plain Clojure map
   Usage:
     (inspect client \"lapax/tiny-haproxy\")"
+  [client image]
   (let [{:keys [status body]} (dc/rpc-get client
                                           (str "/images/" image "/json"))]
     (case status
@@ -126,7 +130,7 @@
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
-(defn history [client image]
+(defn history
   "Returns the history of the image
   Arguments:
     client  - the initialized client of docker
@@ -135,15 +139,16 @@
     a list of maps of history item
   Usage:
     (history client \"lapax/tiny-haproxy\")"
+  [client image]
   (let [{:keys [status body]} (dc/rpc-get client
-                                           (str "/images/" image "/history" ))]
+                                          (str "/images/" image "/history" ))]
     (case status
       200 (dc/parse-json client body)
       404 (throw+ (:no-image exceptions))
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
-(defn push [client image & {:keys [registry]}]
+(defn push
   "Push the image on the registry
   Arguments:
     client  -  the initialized client for docker api
@@ -155,6 +160,7 @@
   Usage:
     (push client \"lapax/tiny-haproxy\")
     (push client \"lapax/tiny-haproxy\" :registry \"http://url\")"
+  [client image & {:keys [registry]}]
   (let [params {:registry registry}
         {:keys [status body]} @(dc/stream-post client
                                              (str "/images/" image "/push")
@@ -166,8 +172,7 @@
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
-(defn tag [client image & {:keys [repo force]
-                           :or {repo "default", force false}}]
+(defn tag
   "Tags the image into a repository
   Arguments:
     client  - the initialized client of docker
@@ -180,6 +185,8 @@
   Usage:
     (tag client \"base\" :repo \"default\")
     (tag client \"base\" :repo \"default\" :force true)"
+  [client image & {:keys [repo force]
+                   :or {repo "default", force false}}]
   (let [params {:repo repo, :force force}
         {:keys [status body]} (dc/rpc-get client
                                           (str "/images/" image "/tag")
@@ -192,7 +199,7 @@
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
-(defn search [client search-term]
+(defn search
   "Searches for an image in the docker index.
   Arguments:
     client      -  the initialized client
@@ -201,6 +208,7 @@
     a list with search results
   Usage:
     (search client \"sshd\")"
+  [client search-term]
   (let [params {:term search-term}
         {:keys [status body]} (dc/rpc-get client
                                           (str "/images/search")
