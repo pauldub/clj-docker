@@ -42,9 +42,9 @@
     (rpc-delete this path nil))
   (rpc-delete [this path request-map]
     @(http/request
-       (merge {:method :delete, :url (to-url this path)})
-       (:client-options this)
-       request-map))
+       (merge {:method :delete, :url (to-url this path)}
+              (:client-options this)
+              request-map)))
   StreamedRPC
   (stream-get [this path]
     (stream-get this path nil))

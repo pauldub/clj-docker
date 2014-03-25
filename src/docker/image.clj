@@ -79,13 +79,12 @@
          :as resp} (dc/rpc-delete client (str "/images/" image-name)
                                          {:query-params {:force force}})]
     (case status
-      200 (dc/parse-json client body)
+      200 true
       404 (throw+ (:no-image exceptions))
       409 (throw+ (:image-conflict exceptions))
       500 (throw+ (:server-error exceptions))
-      (throw+ (merge
-                (:unspecified exceptions)
-                (:response resp))))))
+      (throw+ (merge (:unspecified exceptions) resp)))))
+
 
 (defn insert-file [client image url path]
   "Inserts a file from the url in the image on the path.
@@ -101,7 +100,7 @@
   (let [params {:url url, :path path}
         {:keys [status body]
          :as resp} @(dc/stream-post client
-                                    (str "/images/" image)
+                                    (str "/images/" image "/insert")
                                     {:query-params params})]
     (case status
       200 (dc/parse-stream client body)
