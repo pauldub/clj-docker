@@ -16,15 +16,15 @@
 
 (def make-client dc/make-client)
 
-(defn version [client]
+(defn version
   "Shows the docker version used on host.
   Usage:
     (def docker (make-client))
     (version docker)"
-  (debug "reading docker version from " (:host client))
+  [client]
   (let [{:keys [status body error]} (dc/rpc-get client "/version")]
     (case status
-      200 (dc/parse-json client body)
+      200 (dc/parse-json body)
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
@@ -46,17 +46,18 @@
     (let [{:keys [status body error]} (dc/rpc-get client "/events"
                                                          {:query-params {:since since}})]
       (case status
-        200 (dc/parse-json client body)
+        200 (dc/parse-json body)
         500 (throw+ (:server-error exceptions))
         (throw+ (:unspecified exceptions))))))
 
-(defn info [client]
+(defn info
   "displays system-wide information
   Usage:
     (info docker)"
+  [client]
   (let [{:keys [status body error]} (dc/rpc-get client "/info")]
     (case status
-      200 (dc/parse-json client body)
+      200 (dc/parse-json body)
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
@@ -66,7 +67,9 @@
 ;;curl --data "{\"username\":\"tauhotest\",\"password\":\"qwerty_test\",\"serveraddress\":\"https://index.docker.io/v1\"}" http://10.0.1.2:4243/auth -i -v -H "X-Docker-Registry-Version:\"1\""
 ;;
 
-(defn authorize [client username password email]
+(defn authorize
+  "authorizes client's session with docker's index auth service"
+  [client username password email]
   (let [{:keys [status body error]
          :as resp} (dc/rpc-post
                       client "/auth"

@@ -2,7 +2,6 @@
   (:require [docker.client :as dc]
             [slingshot.slingshot :refer [throw+ try+]]
             [taoensso.timbre :as log]
-            [cheshire.core :refer [parse-string parse-stream]]
             [clojure.java.io :as io]))
 
 (def exceptions {:server-error {:type ::server_error
@@ -32,7 +31,7 @@
         {:keys [status body error]} (dc/rpc-get client "/images/json"
                                                 {:query-params params})]
     (case status
-      200 (dc/parse-json client body)
+      200 (dc/parse-json body)
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
@@ -62,7 +61,7 @@
          :as resp} @(dc/stream-post client "/images/create"
                                    {:query-params params})]
     (case status
-      200 (dc/parse-stream client body)
+      200 (dc/parse-stream body)
       500 (throw+ (:server-error exceptions))
       (throw+ (merge (:unspecified exceptions)
                      {:response resp})))))
@@ -106,7 +105,7 @@
                                     (str "/images/" image "/insert")
                                     {:query-params params})]
     (case status
-      200 (dc/parse-stream client body)
+      200 (dc/parse-stream body)
       500 (throw+ (:server-error exceptions))
       (throw+ (merge
                 (:unspecified exceptions)
@@ -125,7 +124,7 @@
   (let [{:keys [status body]} (dc/rpc-get client
                                           (str "/images/" image "/json"))]
     (case status
-      200 (dc/parse-json client body)
+      200 (dc/parse-json body)
       404 (throw+ (:no-image exceptions))
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
@@ -143,7 +142,7 @@
   (let [{:keys [status body]} (dc/rpc-get client
                                           (str "/images/" image "/history" ))]
     (case status
-      200 (dc/parse-json client body)
+      200 (dc/parse-json body)
       404 (throw+ (:no-image exceptions))
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
@@ -167,7 +166,7 @@
                                              (when-not (nil? registry)
                                                {:query-params params}))]
     (case status
-      200 (dc/parse-stream client body)
+      200 (dc/parse-stream body)
       404 (throw+ (:no-image exceptions))
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
@@ -214,7 +213,7 @@
                                           (str "/images/search")
                                           {:query-params params})]
     (case status
-      200 (dc/parse-json client body)
+      200 (dc/parse-json body)
       500 (throw+ (:server-error))
       (throw+ (:unspecified exceptions)))))
 
