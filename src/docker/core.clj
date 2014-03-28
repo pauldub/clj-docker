@@ -161,55 +161,15 @@
   ;; (let [dir (str "/" (clojure.string/trim-newline (mktemp "-d")))]
   ;;   (echo dockerfile {:out (java.io.File. (str dir "/Dockerfile"))})
   ;;   (println (tar (str dir))))
-  
+
   )
-
-(defn containers []
-  (rpc-get "/containers/json"))
-
-(defn create-container [{:keys [image command hostname user detach stdin-open tty mem-limit
-                                ports environment dns volumes volumes-from]
-                         :or {:hostname nil :user nil :detach false :stdin-open false
-                              :tty false :mem-limit 0 :ports [] :environment []
-                              :dns [] :volumes nil :volumes-from nil}}]
-  (let [container {:Hostname hostname
-                   :PortSpecs ports
-                   :User user
-                   :Tty tty
-                   :OpenStdin stdin-open
-                   :Memory mem-limit
-                   :AttachStdin false
-                   :AttachStdout false
-                   :AttachStderr false                  
-                   :Env [environment]
-                   :Cmd command
-                   :Dns [dns]
-                   :Image image
-                   :Volumes volumes
-                   :VolumesFrom volumes-from}]
-    (rpc-post-json "/containers/create" container)))
-
-(defn diff [container]
-  (rpc-get (str "/containers/" container "/changes")))
-
 (defn export [container]
   (rpc-get-stream (str "/containers/" container "/export")))
-
-(defn inspect-container [container]
-  (rpc-get (str "/containers/" container "/json")))
 
 (defn kill [containers]
   (let [urls (map #(str "/containers/" %1 "/kill") containers)
         futures (doall (map rpc-post urls))]
     (doseq [resp futures]
       (println resp))))
-
-(defn remove-container [container]
-  (rpc-delete (str "/containers/" container)))
-(defn start [container & ports]
-  (rpc-post (str "/containers/" container "/start") {:Binds ports}))
-
-(defn stop [container]
-  (rpc-post (str "/containers/" container "/stop")))
 
 ) ;; end of comment

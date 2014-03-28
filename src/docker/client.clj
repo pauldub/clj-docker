@@ -24,6 +24,13 @@
     (catch Object _
       (error (:throwable &throw-context)))))
 
+(defn save-stream
+  "Saves byte stream into file."
+  [content file-path]
+  (io/copy
+    content ;; (io/reader content)
+    (io/file file-path))
+  file-path)
 
 ;; -- CLIENT PROTOCOLS
 
