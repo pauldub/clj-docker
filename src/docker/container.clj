@@ -6,26 +6,20 @@
             [cheshire.core :refer [generate-string]]
             [clojure.java.io :as io]))
 
-;;TODO: experiment response-handlers as multimethods not select-case
-;; defmultu container-response-handler [status body error] ...
-;;
+(def exceptions
+  {400 {:type ::bad_parameter
+        :message "Bad parameter - check arguments."}
+   404 {:type ::no_container
+        :message "Container or baseimage doesnt exists"}
+   406 {:type ::not_attached
+        :message "Container not running - cant attach."}
+   500 {:type ::server_error
+        :message "Fatal error in Docker agent."}
+   :uf {:type ::unspecified_error
+        :message "Unspecified error: timeout."}})
 
-(def exceptions {:server-error {:type ::server_error
-                                :status 500
-                                :message "Fatal error in Docker agent."}
-                 :unspecified {:type ::unspecified_error
-                               :status 418
-                               :message "Unspecified error: timeout or bug in source."}
-                 :bad-parameter {:type ::bad_parameter
-                                 :status 400
-                                 :message "Bad parameter - check arguments."}
-                 :no-container {:type ::no_container
-                                :status 404
-                                :message "Container or baseimage doesnt exists"}
-                 :not-attached {:type ::not_attached
-                                :status 406
-                                :message "Container not running - cant attache."}})
 
+(def response-handler (dc/make-response-handler exceptions))
 
 (defn show-all
   "lists containers on the host
@@ -48,13 +42,13 @@
   (let [params (merge {:all all, :size size}
                       (when-not (nil? limit) {:limit limit})
                       (when-not (nil? since) {:since since})
-                      (when-not (nil? before) {:before before}))
-        {:keys [status body]} (dc/rpc-get client "/containers/json"
-                                         {:query-params params})]
-    (case status
-      200 (dc/parse-json body)
-      400 (throw+ (:bad-parameter exceptions))
-      (throw+ (:unspecified exceptions)))))
+                      (when-not (nil? before) {:before before}))]
+
+    (response-handler
+      (dc/rpc-get client
+        "/containers/json"
+        {:query-params params})
+      dc/parse-json)))
 
 (def default-container-config
   {:Hostname ""
@@ -77,18 +71,18 @@
    :WorkingDir ""
    :ExposedPorts {"22/tcp" {}}})
 
-;;TODO:add validators
+;;TODO:add validators ~ prismatic's schema?
 (defn create-config
   [user-configs]
     (merge default-container-config user-configs))
-
 
 (defn create
   "creates new container
   Arguments:
     client          - initialized dockers client
     container-name  - a name of container (only alphanum & _)
-    user-configs    - map of configurations user wants to change on default-container-config (optional)
+    user-configs    - map of configurations user wants to change
+                      on default-container-config (optional)
   Usage:
     (create client) ;; just use default settings
     (create client {:Hostname \"conta2\", :Memory 1024})
@@ -96,20 +90,16 @@
   ([client] (create client nil {}))
   ([client user-configs] (create client user-configs nil))
   ([client user-configs container-name]
-    (let [request-data (create-config user-configs)
-          {:keys [status body]
-           :as resp} (dc/rpc-post client
-                                  "/containers/create"
-                                  (merge
-                                    {:body (generate-string request-data)}
-                                    (when-not (empty? container-name)
-                                      {:query-params {:name container-name}})))]
-      (case status
-        201 (dc/parse-json body)
-        404 (throw+ (:no-container exceptions))
-        406 (throw+ (:not-attached exceptions))
-        500 (throw+ (:server-error exceptions))
-        (throw+ (:unspecified exceptions))))))
+    (let [request-data (create-config user-configs)]
+      (response-handler
+        (dc/rpc-post client
+          "/containers/create"
+          (merge
+            {:body (generate-string request-data)}
+            ;; if requested, add container name into query-params
+            (when-not (empty? container-name)
+              {:query-params {:name container-name}})))
+        dc/parse-json))))
 
 (defn inspect
   "returns low-level information on the container id
@@ -120,15 +110,11 @@
     a clojure map
   Usage:
     (inspect client \"aabcdef1234\")"
-
   [client container-id]
-  (let [{:keys [status body]} (dc/rpc-get client
-                                          (str "/containers/" container-id  "/json"))]
-    (case status
-      200 (dc/parse-json body)
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (response-handler
+    (dc/rpc-get client
+      (str "/containers/" container-id  "/json"))
+    dc/parse-json))
 
 (defn top
   "lists processes running inside the container id.
@@ -140,14 +126,12 @@
   Usage:
     (top client \"abse123\")"
   [client container-id & {:keys [ps_args]}]
-  (let [{:keys [status body]} (dc/rpc-get client
-                                          (str "/containers/" container-id "/top")
-                                          {:query-params {:ps_args ps_args}})]
-    (case status
-      200 (dc/parse-json body)
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (let [params {:ps_args ps_args}]
+    (response-handler
+      (dc/rpc-get client
+        (str "/containers/" container-id "/top")
+        {:query-params params})
+      dc/parse-json)))
 
 (defn changes
   "shows changes on container id's filesystem
@@ -157,15 +141,11 @@
   Usage:
     (changes client \"abc123\")"
   [client container-id]
-  (let [{:keys [status body]} (dc/rpc-get client
-                                          (str "/containers/" container-id "/changes"))]
-    (case status
-      200 (dc/parse-json body)
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (response-handler
+    (dc/rpc-get client
+      (str "/containers/" container-id "/changes"))
+    dc/parse-json))
 
-;;TODO: continue here
 (defn export
   "export the container into local file,
    which name will be docker id
@@ -178,13 +158,10 @@
   Usage:
     (export client \"container-1\" \"/usr/shared\")"
   [client id file-path]
-  (let [{:keys [status body]} @(dc/stream-get client
-                                            (str "/containers/" id "/export"))]
-    (case status
-      200 (dc/save-stream body (str file-path "/" id))
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (response-handler
+    @(dc/stream-get client
+      (str "/containers/" id "/export"))
+    (fn [body] (dc/save-stream body (str file-path "/" id)))))
 
 (def default-start-configuration
   {:Binds ["/tmp:/tmp"]
@@ -210,20 +187,15 @@
                   :host-config {:SomeValue 101})"
   ([client id] (start client id nil))
   ([client id config & {:keys [host-config]}]
-    (let [config_ (merge default-start-configuration config)
-          {:keys [status body]
-           :as resp} (dc/rpc-post client
-                                  (str "/containers/" id "/start")
-                                  (merge {}
-                                         (when-not (nil? host-config)
-                                           {:query-params {:hostConfig host-config}})
-                                         {:body (generate-string config_)}))]
-      (case status
-        204 true
-        404 (throw+ (:no-container exceptions))
-        500 (throw+ (:server-error exceptions))
-        (throw+ (:unspecified exceptions))))))
-
+    (let [config_ (merge default-start-configuration config)]
+      (response-handler
+        (dc/rpc-post client
+          (str "/containers/" id "/start")
+          (merge
+            {:body (generate-string config_)}
+            (when-not (nil? host-config)
+              {:query-params {:hostConfig host-config}})))
+        (fn [body] true)))))
 
 (defn stop
   "stops the container with id
@@ -237,17 +209,14 @@
     (stop client \"abc123\" 5)"
   ([client id] (stop client id nil))
   ([client id timeout]
-    (let [{:keys [status body]
-           :as resp} (dc/rpc-post client
-                                 (str "/containers/" id "/stop")
-                                 (merge {}
-                                        (when-not (nil? timeout)
-                                          {:query-params {:t timeout}})))]
-      (case status
-        204 true
-        404 (throw+ (:no-container exceptions))
-        500 (throw+ (:server-error exceptions))
-        (throw+ (:unspecified exceptions))))))
+    (response-handler
+      (dc/rpc-post client
+        (str "/containers/" id "/stop")
+        (merge
+          {}
+          (when-not (nil? timeout)
+            {:query-params {:t timeout}})))
+      (fn [body] true))))
 
 (defn restart
   "restarts the container with id
@@ -261,17 +230,14 @@
     (restart client \"abc123\" 5)"
   ([client id] (restart client id nil))
   ([client id timeout]
-    (let [{:keys [status body]
-           :as resp} (dc/rpc-post client
-                                 (str "/containers/" id "/restart")
-                                 (merge {}
-                                        (when-not (nil? timeout)
-                                          {:query-params {:t timeout}})))]
-      (case status
-        204 true
-        404 (throw+ (:no-container exceptions))
-        500 (throw+ (:server-error exceptions))
-        (throw+ (:unspecified exceptions))))))
+    (response-handler
+      (dc/rpc-post client
+        (str "/containers/" id "/restart")
+        (merge
+          {}
+          (when-not (nil? timeout)
+            {:query-params {:t timeout}})))
+      (fn [body] true))))
 
 (defn kill
   "kills the container with id
@@ -282,16 +248,11 @@
     (kill client \"abc123\")
     (kill client \"abc123\" 5)"
   [client id]
-  (let [{:keys [status body]
-          :as resp} (dc/rpc-post client
-                                (str "/containers/" id "/kill")
-                                {})]
-    (case status
-      204 true
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
-
+  (response-handler
+    (dc/rpc-post client
+      (str "/containers/" id "/kill")
+      {})
+    (fn [body] true)))
 
 (defn wait
   "Blocks until container stops, then returns the exit code
@@ -301,15 +262,11 @@
   Usage:
     (wait client \"abc123\")"
   [client id]
-  (let [{:keys [status body]
-         :as resp} (dc/rpc-post client
-                                (str "/containers/" id "/wait")
-                                {})]
-    (case status
-      200 (dc/parse-json body)
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (response-handler
+    (dc/rpc-post client
+      (str "/containers/" id "/wait")
+      {})
+    dc/parse-json))
 
 (defn remove
   "remove the container from the filesystem
@@ -324,32 +281,33 @@
     (remove client \"abc123\" :force true)
     (remove client \"abc123\" :volumes true)"
   [client id & {:keys [volumes force] :or {volumes false, force false}}]
-  (let [{:keys [status body]} (dc/rpc-delete client
-                                          (str "/containers/" id)
-                                          {:query-params {:v volumes
-                                                          :force force}})]
-    (case status
-      204 true
-      400 (throw+ (:bad-argument exceptions))
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
-
+  (response-handler
+    (dc/rpc-delete client
+      (str "/containers/" id)
+      {:query-params {:v volumes, :force force}})
+    (fn [body] true)))
 
 ;;TODO: how to handle multiple files and directories
 (defn copy-file
-  "Copies file from the container into the target-dir on the client side."
+  "Copies file from the container into the target-dir on the client side.
+  Arguments:
+    client     - an initialized client of docker's remote api
+    id         - the id of the container
+    src-path   - fullpath to the source file
+    target-dir - the target directory
+  Returns:
+   a string of fullpath of the file
+  Usage:
+    (copy-file client \"container1\" \"/tmp/test.txt\" \"/tmp\")"
   [client id src-path target-dir]
   (let [file-name (-> src-path (clojure.string/split #"\/") last)
-        request {:Resource src-path}
-        {:keys [status body]} @(dc/stream-post client
-                                           (str "/containers/" id "/copy")
-                                           {:body (generate-string request)})]
-    (case status
-      200 (dc/save-stream body (str target-dir "/" file-name))
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+        file-fullpath (str target-dir "/" file-name)
+        request {:Resource src-path}]
+    (response-handler
+      @(dc/stream-post client
+        (str "/containers/" id "/copy")
+        {:body (generate-string request)})
+      (fn [body] (dc/save-stream body file-fullpath)))))
 
 (defn attach
   "attach to the container's feeds as stdio,stderr and logs.
@@ -371,19 +329,16 @@
   [client id & {:keys [logs, stream, stdin, stdout, stderr]
                 :or {logs false, stream false, stdin false,
                      stdout false, stderr false}}]
-  (let [{:keys [status body]} @(dc/stream-post client
-                                      (str "/containers/" id "/attach")
-                                      {:query-params {:logs logs
-                                                      :stream stream
-                                                      :stdin stdin
-                                                      :stdout stdout
-                                                      :stderr stderr}})]
-    (case status
-      200 (clojure.java.io/reader body)
-      400 (throw+ (:bad-parameter exceptions))
-      404 (throw+ (:no-container exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (let [params {:logs logs
+                :stream stream
+                :stdin stdin
+                :stdout stdout
+                :stderr stderr}]
+    (response-handler
+      @(dc/stream-post client
+        (str "/containers/" id "/attach")
+        {:query-params params})
+      (fn [body] (clojure.java.io/reader body)))))
 
 (comment
   ;; workflow to start using attach
@@ -411,7 +366,6 @@
 )
 
 ;;TODO: experimental: it's not yet in official docs
-
 (defn attach-ws
   "attaches to the container's feed via websocket
   Arguments:

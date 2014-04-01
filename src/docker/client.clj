@@ -113,7 +113,7 @@
     (let [ws-url (to-ws-url this path)
           ws-client (WebSocketClient. ws-url)])))
 
-(def default-index-url "https://index.docker.io/v1")
+(def default-index-url "https://index.docker.io/v1/")
 (def default-client-options {:host "10.0.100.2:4243"
                              :version "v1.10"
                              :user-agent "clj-docker (httpkit 2.1.17)"
@@ -122,6 +122,16 @@
                              :headers {"Accept" "application/json"
                                        "Content-Type" "application/json"
                                        "X-Docker-Registry-Version" "v1"}})
+
+
+(defn make-response-handler [exceptions]
+  (fn response-handler [{:keys [status body error]} callback-fn]
+    (if (< 199 status 300)
+      (callback-fn body)
+      (throw+
+        (merge
+          (get exceptions status (:uf exceptions))
+          {:content body :error error :status status})))))
 
 (defn make-client
   "Creates new client to access Docker agent.

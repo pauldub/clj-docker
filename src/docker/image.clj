@@ -4,20 +4,19 @@
             [taoensso.timbre :as log]
             [clojure.java.io :as io]))
 
-(def exceptions {:server-error {:type ::server_error
-                                :status 500
-                                :message "Fatal error in Docker agent."}
-                 :unspecified  {:type ::unspecified_error
-                                :status 418
-                                :message "Unspecified error. Probably timeout exception due wrong URl."}
-                 :no-image {:type ::no_image
-                            :status 404
-                            :message "Image doesnt exist."}
-                 :image-conflict {:type ::image_conflict
-                                  :status 409
-                                  :message "Conflicts while "}})
+(def exceptions
+  {400 {:type ::bad_parameter
+        :message "Invalid parameter - check input data;"}
+   404 {:type ::no_image
+         :message "Image doesnt exist."}
+   409 {:type ::image_conflict
+        :message "Conflicts while "}
+   500 {:type ::server_error
+        :message "Fatal error in Docker agent."}
+   :uf {:type ::unspecified_error
+        :message "Unspecified error. Probably timeout exception due wrong URl."}})
 
-;;TODO: refactor case-blocks into response-handler
+(def response-handler (dc/make-response-handler exceptions))
 
 (defn show-all
   "Lists all images on Docker host.
@@ -29,14 +28,9 @@
     (show-all client)
     (show-all client :all 10)"
   [client & {:keys [all] :or {all 0}}]
-  (let [params {:all all}
-        {:keys [status body error]} (dc/rpc-get client "/images/json"
-                                                {:query-params params})]
-    (case status
-      200 (dc/parse-json body)
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
-
+  (response-handler
+    (dc/rpc-get client "/images/json" {:query-params {:all all}})
+    dc/parse-json))
 
 ;;TODO: finish authorization
 ;;TODO: add support for from-src
@@ -58,15 +52,12 @@
   (let [params {:fromImage image
                 :repo repo
                 :tag tag
-                :registry registry}
-        {:keys [status body]
-         :as resp} @(dc/stream-post client "/images/create"
-                                   {:query-params params})]
-    (case status
-      200 (dc/parse-stream body)
-      500 (throw+ (:server-error exceptions))
-      (throw+ (merge (:unspecified exceptions)
-                     {:response resp})))))
+                :registry registry}]
+    (response-handler
+      @(dc/stream-post client
+          "/images/create"
+          {:query-params params})
+      dc/parse-stream)))
 
 (defn delete
   "Remove image from filesystem
@@ -78,16 +69,12 @@
   Usage:
     (delete client \"registry\")"
   [client image-name & {:keys [force] :or {force false}}]
-  (let [{:keys [status body]
-         :as resp} (dc/rpc-delete client (str "/images/" image-name)
-                                         {:query-params {:force force}})]
-    (case status
-      200 true
-      404 (throw+ (:no-image exceptions))
-      409 (throw+ (:image-conflict exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (merge (:unspecified exceptions) resp)))))
-
+  (let [params {:force force}]
+    (response-handler
+      (dc/rpc-delete client
+        (str "/images/" image-name)
+        {:query-params params})
+      (fn [body] true))))
 
 (defn insert-file
   "Inserts a file from the url in the image on the path.
@@ -101,17 +88,12 @@
   Usage:
     (insert-file client \"http://s3.in/folder/file.exe\" \"/usr/shared\")"
   [client image url path]
-  (let [params {:url url, :path path}
-        {:keys [status body]
-         :as resp} @(dc/stream-post client
-                                    (str "/images/" image "/insert")
-                                    {:query-params params})]
-    (case status
-      200 (dc/parse-stream body)
-      500 (throw+ (:server-error exceptions))
-      (throw+ (merge
-                (:unspecified exceptions)
-                (:response resp))))))
+  (let [params {:url url, :path path}]
+    (response-handler
+      @(dc/stream-post client
+         (str "/images/" image "/insert")
+         {:query-params params})
+      dc/parse-stream)))
 
 (defn inspect
   "Returns low-level information on the image name
@@ -123,13 +105,10 @@
   Usage:
     (inspect client \"lapax/tiny-haproxy\")"
   [client image]
-  (let [{:keys [status body]} (dc/rpc-get client
-                                          (str "/images/" image "/json"))]
-    (case status
-      200 (dc/parse-json body)
-      404 (throw+ (:no-image exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (response-handler
+    (dc/rpc-get client
+      (str "/images/" image "/json"))
+    dc/parse-json))
 
 (defn history
   "Returns the history of the image
@@ -141,13 +120,10 @@
   Usage:
     (history client \"lapax/tiny-haproxy\")"
   [client image]
-  (let [{:keys [status body]} (dc/rpc-get client
-                                          (str "/images/" image "/history" ))]
-    (case status
-      200 (dc/parse-json body)
-      404 (throw+ (:no-image exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (response-handler
+    (dc/rpc-get client
+      (str "/images/" image "/history"))
+    dc/parse-json))
 
 (defn push
   "Push the image on the registry
@@ -162,16 +138,14 @@
     (push client \"lapax/tiny-haproxy\")
     (push client \"lapax/tiny-haproxy\" :registry \"http://url\")"
   [client image & {:keys [registry]}]
-  (let [params {:registry registry}
-        {:keys [status body]} @(dc/stream-post client
-                                             (str "/images/" image "/push")
-                                             (when-not (nil? registry)
-                                               {:query-params params}))]
-    (case status
-      200 (dc/parse-stream body)
-      404 (throw+ (:no-image exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+  (let [params {:registry registry}]
+    (response-handler
+      @(dc/stream-post client
+        (str "/images/" image "/push")
+        ;; add registry only if it was given
+        (when-not (nil? registry)
+          {:query-params params}))
+      dc/parse-stream)))
 
 (defn tag
   "Tags the image into a repository
@@ -187,18 +161,13 @@
     (tag client \"base\" :repo \"default\")
     (tag client \"base\" :repo \"default\" :force true)"
   [client image & {:keys [repo force]
-                   :or {repo "default", force false}}]
-  (let [params {:repo repo, :force force}
-        {:keys [status body]} (dc/rpc-get client
-                                          (str "/images/" image "/tag")
-                                          params)]
-    (case status
-      201 true
-      400 (throw+ (:bad-parameter exceptions))
-      404 (throw+ (:no-image exceptions))
-      409 (throw+ (:image-conflict exceptions))
-      500 (throw+ (:server-error exceptions))
-      (throw+ (:unspecified exceptions)))))
+                   :or {repo "", force false}}]
+  (let [params {:repo repo, :force force}]
+    (response-handler
+      (dc/rpc-get client
+        (str "/images/" image "/tag")
+        {:query-params params})
+      (fn [body] true))))
 
 (defn search
   "Searches for an image in the docker index.
@@ -210,12 +179,9 @@
   Usage:
     (search client \"sshd\")"
   [client search-term]
-  (let [params {:term search-term}
-        {:keys [status body]} (dc/rpc-get client
-                                          (str "/images/search")
-                                          {:query-params params})]
-    (case status
-      200 (dc/parse-json body)
-      500 (throw+ (:server-error))
-      (throw+ (:unspecified exceptions)))))
-
+  (let [params {:term search-term}]
+    (response-handler
+      (dc/rpc-get client
+        (str "/images/search")
+        {:query-params params})
+      dc/parse-json)))
