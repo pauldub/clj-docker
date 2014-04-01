@@ -90,14 +90,20 @@
     container-name  - a name of container (only alphanum & _)
     user-configs    - map of configurations user wants to change on default-container-config (optional)
   Usage:
-    (create client \"conta\")
-    (create client \"conta2\" {:Hostname \"conta2\", :Memory 1024})"
-  ([client container-name] (create client container-name {}))
-  ([client container-name user-configs]
+    (create client) ;; just use default settings
+    (create client {:Hostname \"conta2\", :Memory 1024})
+    (create client {} \"container-123a\")"
+  ([client] (create client nil {}))
+  ([client user-configs] (create client user-configs nil))
+  ([client user-configs container-name]
     (let [request-data (create-config user-configs)
-          {:keys [status body]} (dc/rpc-post client "/containers/create"
-                                             {:query-params {:name container-name}
-                                              :body (generate-string request-data)})]
+          {:keys [status body]
+           :as resp} (dc/rpc-post client
+                                  "/containers/create"
+                                  (merge
+                                    {:body (generate-string request-data)}
+                                    (when-not (empty? container-name)
+                                      {:query-params {:name container-name}})))]
       (case status
         201 (dc/parse-json body)
         404 (throw+ (:no-container exceptions))
@@ -319,7 +325,7 @@
     (remove client \"abc123\" :volumes true)"
   [client id & {:keys [volumes force] :or {volumes false, force false}}]
   (let [{:keys [status body]} (dc/rpc-delete client
-                                          (str "/containers/" id "/remove")
+                                          (str "/containers/" id)
                                           {:query-params {:v volumes
                                                           :force force}})]
     (case status
@@ -345,9 +351,94 @@
       500 (throw+ (:server-error exceptions))
       (throw+ (:unspecified exceptions)))))
 
-;;TODO: finish
 (defn attach
-  ""
-  [])
+  "attach to the container's feeds as stdio,stderr and logs.
+  Arguments:
+    client  -  an initialized dockers client
+    id      - the id of the container
+  Optional arguments:
+    :logs   - adds logs into stream, default false
+    :stream - returns stream (raw data from process PTY + stdin),
+              default false
+    :stdin  - if stream = true, attach to stdin, default false
+    :stdout - if logs=true, returns stdout log, default false
+    :stderr - if logs=true, returns stderr log, default false
+  Returns:
+    BufferedReader object to read streams.
+  Usage:
+    (attach client \"abc123\")
+    (attach client \"abc123\" :stderr true)"
+  [client id & {:keys [logs, stream, stdin, stdout, stderr]
+                :or {logs false, stream false, stdin false,
+                     stdout false, stderr false}}]
+  (let [{:keys [status body]} @(dc/stream-post client
+                                      (str "/containers/" id "/attach")
+                                      {:query-params {:logs logs
+                                                      :stream stream
+                                                      :stdin stdin
+                                                      :stdout stdout
+                                                      :stderr stderr}})]
+    (case status
+      200 (clojure.java.io/reader body)
+      400 (throw+ (:bad-parameter exceptions))
+      404 (throw+ (:no-container exceptions))
+      500 (throw+ (:server-error exceptions))
+      (throw+ (:unspecified exceptions)))))
+
+(comment
+  ;; workflow to start using attach
+  (require '[docker.client :as dc])
+  (require '[docker.image :as image])
+  (require '[docker.container :as container])
 
 
+  (def client (dc/make-client "10.0.100.2:4243"))
+
+  ;; pull base image
+  (image/create client "lapax/tiny-haproxy")
+
+  ;; create running container with activated TTY
+  (def box (container/create client
+                             {:Tty true,
+                              :Image "lapax/tiny-haproxy"
+                              :Cmd ["/bin/sh", "-l"]}))
+
+  (container/inspect client (:Id box))
+
+  ;; attach to container
+  (attach client (:Id box) :logs true :stdout true)
+  (attach-ws client (:Id box) :logs true :stdout true)
+)
+
+;;TODO: experimental: it's not yet in official docs
+
+(defn attach-ws
+  "attaches to the container's feed via websocket
+  Arguments:
+    client    - an initialized docker's client
+    id        - the id of the container
+  Optional arguments:
+    :logs     - adds logs into response stream, default false
+    :stream   - returns stream, default false
+    :stdin    - if stream=true, adds stdin into stream, default false
+    :stdout   - if logs=true, returns stdout log, default false
+    :stderr   - if logs=true, returns stderr log, default false
+    :output   - where to pop results, have to support pop function
+  Returns:
+    clojure.lang.PersistentQueue
+  Usage:
+    (attach-ws client \"abc123\")"
+  [client id & {:keys [logs, stream, stdin, stdout stderr output]
+                :or {logs false, stream false, stdin false,
+                     stdout false, stderr false,
+                     output (clojure.lang.PersistentQueue/EMPTY)}}]
+  (let [response-handler #(pop output %1)]
+    (dc/stream-ws client
+                (str "/containers/" id "/attach/ws")
+                response-handler
+                {:query-params {:logs logs
+                                :stream stream
+                                :stdin stdin
+                                :stdout stdout
+                                :stderr stderr}})
+    output))

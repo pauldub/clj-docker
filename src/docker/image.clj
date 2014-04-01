@@ -17,6 +17,8 @@
                                   :status 409
                                   :message "Conflicts while "}})
 
+;;TODO: refactor case-blocks into response-handler
+
 (defn show-all
   "Lists all images on Docker host.
   Arguments:

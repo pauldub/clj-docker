@@ -3,7 +3,8 @@
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [slingshot.slingshot :refer [throw+ try+]]
-            [taoensso.timbre :refer (debug warn error)]))
+            [taoensso.timbre :refer (debug warn error)])
+  (:import [org.httpkit.ws WebSocketClient]))
 
 ;; -- JSON PARSERS
 (defn parse-json
@@ -28,14 +29,15 @@
   "Saves byte stream into file."
   [content file-path]
   (io/copy
-    content ;; (io/reader content)
+    content
     (io/file file-path))
   file-path)
 
 ;; -- CLIENT PROTOCOLS
 
 (defprotocol URLBuilder
-  (to-url [this path] [this path query-params]))
+  (to-url [this path] [this path query-params])
+  (to-ws-url [this path] [this path query-params]))
 
 (defprotocol RPC
   (rpc-get  [this path] [this path params] "makes HTTP/GET request")
@@ -46,12 +48,32 @@
   (stream-get [this path] [this url params])
   (stream-post [this path params]))
 
-;; -- CLIENT implementation
+(defprotocol WebsocketStream
+  (stream-ws [this path handler] [this path handler params]))
 
-(defrecord HTTPKitClient [host client-options index-url]
+;; -- CLIENT implementation
+;; TODO: remove stringy-options and add more robust version for URL builder
+;; TODO: it has to handle unix urls too
+
+(defn- stringify-options
+  "turns query map into query string"
+  [query-options]
+  (->> query-options
+    seq
+    (map (fn [[k,v]] (format "%s=%s" (name k) v)))
+    (interpose "&")
+    (apply str)))
+
+(defrecord HTTPKitClient [host version client-options index-url]
   URLBuilder
   (to-url [this path]
-    (str (:host this) "" path))
+    (format "http://%s/%s%s" (:host this) (:version this) path))
+  (to-ws-url [this path]
+    (to-ws-url this path nil))
+  (to-ws-url [this path query-options]
+    (let [params (stringify-options query-options)]
+      (str "ws://" (:host this) "/" (:version this)
+           (when-not (empty? params) (str "?" params)))))
   RPC
   (rpc-get [this path]
     (rpc-get this path nil))
@@ -84,26 +106,41 @@
     (http/request
       (merge {:method :post, :url (to-url this path), :as :stream}
               (:client-options this)
-              request-map))))
-
-
+              request-map)))
+  WebsocketStream
+  (stream-ws [this path handler] (stream-ws this path handler {}))
+  (stream-ws [this path handler params]
+    (let [ws-url (to-ws-url this path)
+          ws-client (WebSocketClient. ws-url)])))
 
 (def default-index-url "https://index.docker.io/v1")
-(def default-client-options {:user-agent "clj-docker (httpkit 2.1.17)"
+(def default-client-options {:host "10.0.100.2:4243"
+                             :version "v1.10"
+                             :user-agent "clj-docker (httpkit 2.1.17)"
                              :keep-alive 30000
-                             :timeout 1000
+                             :timeout 10000
                              :headers {"Accept" "application/json"
                                        "Content-Type" "application/json"
                                        "X-Docker-Registry-Version" "v1"}})
 
 (defn make-client
-  "Creates new client to access Docker agent."
-  ([host] (make-client host nil nil))
-  ([host client-opts] (make-client host client-opts nil))
-  ([host client-opts index-url]
+  "Creates new client to access Docker agent.
+  Arguments:
+    host - url of the docker agent
+  Optional arguments
+    client-opts   - a clojure map, which includes client options
+    :index-url    - a url where docker images are hosted
+    :version      - a version string of remote api, default v1.10
+  Usage:
+    (make-client \"10.0.10.2:4243\")
+    (make-client \"10.0.10.2:4243\" {:timeout 10000})
+    (make-client \"10.0.10.2:4242\" nil :version \"1.10\")"
+  ([host] (make-client host {}))
+  ([host client-opts & {:keys [index-url version]
+                        :or {index-url default-index-url
+                             version "v1.10"}}]
     (HTTPKitClient. host
+                    version
                     (merge default-client-options client-opts)
-                    (if (nil? (seq index-url))
-                      default-index-url
-                      index-url))))
+                    index-url)))
 

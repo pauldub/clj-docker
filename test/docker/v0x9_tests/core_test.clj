@@ -1,7 +1,6 @@
 (ns docker.v0x9-tests.core-test
   (:require [midje.config :as config]
             [org.httpkit.client :as http]
-            [org.httpkit.fake :refer [with-fake-http]]
             [cheshire.core :refer [generate-string parse-string]]
             [docker.core :refer :all])
   (:use midje.sweet))
@@ -11,7 +10,7 @@
 ;; specs: check scripts folder for bootstrapping scripts to set up test machines.
 ;;
 
-(def default-url "http://10.0.100.2:4243")
+(def default-url "10.0.100.2:4243")
 
 ;;TODO: test does it throws exceptions for edge cases
 

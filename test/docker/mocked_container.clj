@@ -37,23 +37,23 @@
     (fact "works with default params"
       (with-fake-http [#"/containers/create" {:status 201
                                               :body (generate-string resp1)}]
-        (create client "container1") => resp1))
+        (create client) => resp1))
     (fact "works with user configration"
       (with-fake-http [#"/containers/create" {:status 201
                                               :body (generate-string resp1)}]
-        (create client "container1" {:Memory 0 :Cmd ["echo 1"]}) => resp1))
+        (create client {:Memory 0 :Cmd ["echo 1"]}) => resp1))
     (fact "raises exception when container doesnt exists"
       (with-fake-http [#"/containers/create" {:status 404}]
-        (create client "container1") => (throws Exception)))
+        (create client) => (throws Exception)))
     (fact "raises exception when cant attach the container"
       (with-fake-http [#"/containers/create" {:status 406}]
-        (create client "container2") => (throws Exception)))
+        (create client) => (throws Exception)))
     (fact "raises exception when catches server error"
       (with-fake-http [#"/containers/create" {:status 500}]
-        (create client "container3") => (throws Exception)))
+        (create client) => (throws Exception)))
     (fact "raises exception when catches unspecified error"
       (with-fake-http [#"/containers/create" {:status 418}]
-        (create client "container4") => (throws Exception)))))
+        (create client) => (throws Exception)))))
 
 (facts "show container's information"
   (let [client (make-client default-host)
@@ -261,7 +261,24 @@
 
 
 
-(facts "attach a container")
+(facts "attach a container"
+  (let [client (make-client default-host)]
+    (with-fake-http [#"/containers/abc123/attach" {:status 200
+                                                   :body (.getBytes "kikka kukka")}]
+      (slurp (attach client "abc123")) => "kikka kukka"
+      (slurp (attach client "abc123" :logs true)) => "kikka kukka"
+      (slurp (attach client "abc123" :logs true
+                     :stderr true :stdout true)) => "kikka kukka"
+      (slurp (attach client "abc123" :stream true
+                     :stdin true :stdout true)) => "kikka kukka")
+    (with-fake-http [#"/containers/abc123/attach" {:status 400}]
+      (attach client "abc123") => (throws Exception))
+    (with-fake-http [#"/containers/abc123/attach" {:status 404}]
+      (attach client "abc123") => (throws Exception))
+    (with-fake-http [#"/containers/abc123/attach" {:status 500}]
+      (attach client "abc123") => (throws Exception))
+    (with-fake-http [#"/containers/abc123/attach" {:status 418}]
+      (attach client "abc123") => (throws Exception))))
 
 
 

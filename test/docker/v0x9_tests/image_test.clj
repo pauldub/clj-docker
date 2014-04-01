@@ -1,4 +1,4 @@
-(ns docker.mocked-image
+(ns docker.v0x9-tests.image-test
   (:require [midje.sweet :refer :all]
             [midje.config :as config]
             [org.httpkit.client :as http]
@@ -15,4 +15,7 @@
 (facts "creating new docker image"
   (fact "creates new image by pulling it from index"
     (let [docker (make-client default-host)
-          resp1 (create docker "lapax/tiny-haproxy")])))
+          resp1 (create docker "lapax/tiny-haproxy")]
+      (count (show-all docker)) => 1)))
+
+
