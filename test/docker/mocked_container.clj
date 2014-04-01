@@ -220,22 +220,22 @@
 (facts "removes a container"
   (let [client (make-client default-host)]
     (fact "returns success"
-      (with-fake-http [#"/containers/abc123/remove" {:status 204}]
+      (with-fake-http [#"/containers/abc123" {:status 204}]
         (remove client "abc123") => true
         (remove client "abc123" :force false) => true
         (remove client "abc123" :volumes true) => true
         (remove client "abc123" :force true :volumes true) => true))
     (fact "raises exception if got bad arguments"
-      (with-fake-http [#"/containers/abc123/remove" {:status 400}]
+      (with-fake-http [#"/containers/abc123" {:status 400}]
         (remove client "abc123") => (throws Exception)))
     (fact "raises exception if the container doesn exist"
-      (with-fake-http [#"/containers/abc123/remove" {:status 404}]
+      (with-fake-http [#"/containers/abc123" {:status 404}]
         (remove client "abc123") => (throws Exception)))
     (fact "raises exception if the encountered internal server error"
-      (with-fake-http [#"/containers/abc123/remove" {:status 500}]
+      (with-fake-http [#"/containers/abc123" {:status 500}]
         (remove client "abc123") => (throws Exception)))
     (fact "raises exception if got unspecified status code"
-      (with-fake-http [#"/containers/abc123/remove" {:status 418}]
+      (with-fake-http [#"/containers/abc123" {:status 418}]
         (remove client "abc123") => (throws Exception)))))
 
 
