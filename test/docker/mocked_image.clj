@@ -108,12 +108,21 @@
         data (generate-stream [{:status "Pushing..."}
                                {:status "Pushing", :progress "1/?"}]
                               (io/writer test-file))]
+
     (fact "returns proper response stream"
       (with-fake-http [#"/images/test/push" {:status 200
                                              :body (.getBytes (slurp test-file) "utf8")}]
         (let [resp (push docker "test")]
           (first resp) => {:status "Pushing..."}
           (second resp) => {:status "Pushing", :progress "1/?"})))
+
+    (fact "returns proper response when using authorized client"
+      (let [authorized-client (assoc docker :auth-token "base64-token")]
+        (with-fake-http [#"/images/test/push" {:status 200
+                                               :body (.getBytes (slurp test-file) "utf8")}]
+          (let [resp (push authorized-client "test")]
+            (first resp) => {:status "Pushing..."}
+            (second resp) => {:status "Pushing", :progress "1/?"}))))
     (fact "raises excpetions when image doesnt exists"
       (with-fake-http [#"/images/test/push" {:status 404}]
         (push docker "test") => (throws Exception)))))

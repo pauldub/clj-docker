@@ -50,6 +50,8 @@
   (fact "it authorizes users correctly"
     (let [docker (make-client default-url)]
       (with-fake-http [#"\/auth" "OK"]
-        (authorize docker "tauhotest" "qwerty_test" "info@tauho.com") => true))))
+        (let [authorized-client (authorize docker "tauhotest"
+                                           "qwerty_test" "info@tauho.com")]
+          (contains? authorized-client :auth-token) => true)))))
 
 

@@ -56,7 +56,10 @@
     (response-handler
       @(dc/stream-post client
           "/images/create"
-          {:query-params params})
+          (merge
+            {:query-params params}
+            (when (contains? client :auth-token)
+              {:headers {"X-Registry-Auth" (:auth-token client)}})))
       dc/parse-stream)))
 
 (defn delete
@@ -142,9 +145,13 @@
     (response-handler
       @(dc/stream-post client
         (str "/images/" image "/push")
-        ;; add registry only if it was given
-        (when-not (nil? registry)
-          {:query-params params}))
+        (merge {}
+          ;; add registry only if it was given
+          (when-not (nil? registry)
+            {:query-params params})
+          ;; add authorization key iff it exists
+          (when (contains? client :auth-token)
+            {:headers {"X-Registry-Auth" (:auth-token client)}})))
       dc/parse-stream)))
 
 (defn tag

@@ -365,8 +365,10 @@
   (attach-ws client (:Id box) :logs true :stdout true)
 )
 
-;;TODO: experimental: it's not yet in official docs
-(defn attach-ws
+(comment
+  ;;TODO: experimental: it's not yet in official docs
+  ;; it requires netty - add it to project.clj
+  (defn attach-ws
   "attaches to the container's feed via websocket
   Arguments:
     client    - an initialized docker's client
@@ -395,4 +397,4 @@
                                 :stdin stdin
                                 :stdout stdout
                                 :stderr stderr}})
-    output))
+    output)))

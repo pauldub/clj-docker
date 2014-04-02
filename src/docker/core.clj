@@ -1,8 +1,9 @@
 (ns docker.core
   (:require [docker.client :as dc]
             [slingshot.slingshot :refer [throw+ try+]]
-            [taoensso.timbre :refer [debug warn error] :as log]
-            [cheshire.core :refer [generate-string]])
+            [taoensso.timbre :as log]
+            [cheshire.core :refer [generate-string]]
+            [clojure.data.codec.base64 :as base64])
   (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
                                                        TarArchiveOutputStream
                                                        TarArchiveEntry)))
@@ -55,19 +56,27 @@
 
 ;;TODO: finish it
 ;;after successful authorization it should keep authorization info
+(defn encode-auth-config [auth-config]
+  "encodes auth-config map into token"
+  (-> auth-config generate-string (.getBytes) base64/encode String.))
+
 (defn authorize
   "check auth configuration
-  Returns true if logins are correct."
+  Returns client which have authorization info."
   [client username password email]
-  (response-handler
-    (dc/rpc-post
-      client "/auth"
-      {:body (generate-string
-                {:username username
-                 :password password
-                 :email email
-                 :serveraddress (:index-url client)})})
-    (fn [body] true)))
+  (let [auth-config {:username username
+                     :password password
+                     :email email
+                     :serveraddress (:index-url client)}
+        auth-token (encode-auth-config auth-config)]
+    (response-handler
+      (dc/rpc-post
+        client "/auth"
+        {:body (generate-string auth-config)
+         :debug true})
+      ;; when authorization data was correct, add it to client
+      (fn [body]
+        (assoc client :auth-token auth-token)))))
 
 ;; aka which part is not yet refactored
 (comment

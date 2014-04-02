@@ -64,6 +64,18 @@
     (interpose "&")
     (apply str)))
 
+(defn- build-request-map
+  "builds request map by combining default settings and user's request"
+  [client method url user-request-map]
+  (let [headers-map (merge {}
+                      (get-in client [:client-options :headers])
+                      (get user-request-map :headers {}))]
+    (merge
+      {:method method, :url url}
+      (:client-options client) ;; a default configs
+      (dissoc user-request-map :headers)
+      {:headers headers-map})))
+
 (defrecord HTTPKitClient [host version client-options index-url]
   URLBuilder
   (to-url [this path]
@@ -79,34 +91,28 @@
     (rpc-get this path nil))
   (rpc-get [this path request-map]
     @(http/request
-      (merge {:method :get, :url (to-url this path)}
-             (:client-options this)
-             request-map)))
+      (build-request-map this :get (to-url this path) request-map)))
   (rpc-post [this path request-map]
     @(http/request
-       (merge {:method :post, :url (to-url this path)}
-              (:client-options this)
-              request-map)))
+      (build-request-map this :post (to-url this path) request-map)))
   (rpc-delete [this path]
     (rpc-delete this path nil))
   (rpc-delete [this path request-map]
     @(http/request
-       (merge {:method :delete, :url (to-url this path)}
-              (:client-options this)
-              request-map)))
+      (build-request-map this :delete (to-url this path) request-map)))
   StreamedRPC
   (stream-get [this path]
     (stream-get this path nil))
   (stream-get [this path request-map]
     (http/request
-       (merge {:method :get, :url (to-url this path), :as :stream}
-              (:client-options this)
-              request-map)))
+      (build-request-map this
+                         :get (to-url this path)
+                         (assoc request-map :as :stream))))
   (stream-post [this path request-map]
     (http/request
-      (merge {:method :post, :url (to-url this path), :as :stream}
-              (:client-options this)
-              request-map)))
+      (build-request-map this
+                         :post (to-url this path)
+                         (assoc request-map :as :stream))))
   WebsocketStream
   (stream-ws [this path handler] (stream-ws this path handler {}))
   (stream-ws [this path handler params]
@@ -118,7 +124,7 @@
                              :version "v1.10"
                              :user-agent "clj-docker (httpkit 2.1.17)"
                              :keep-alive 30000
-                             :timeout 10000
+                             :timeout 1000 ;; use -1 for long running request
                              :headers {"Accept" "application/json"
                                        "Content-Type" "application/json"
                                        "X-Docker-Registry-Version" "v1"}})
