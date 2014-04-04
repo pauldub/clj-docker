@@ -10,7 +10,12 @@
                  [cheshire "5.2.0"]
                  [org.clojure/data.codec "0.1.0"]]
   :plugins [[lein-shell "0.4.0"]
-            [lein-midje "3.1.3"]]
+            [lein-midje "3.1.3"]
+            [codox "0.6.7"]]
   :java-source-paths ["src/java"]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
-                                  [http-kit.fake "0.2.2"]]}})
+                                  [http-kit.fake "0.2.2"]]}}
+  :codox {:output-dir "doc/codox"
+          :writer codox.writer.html/write-docs
+          :src-dir-uri "http://github.com/tauho/clj-docker/blob/master"
+          :src-linenum-anchor-prefix "L"})

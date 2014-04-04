@@ -53,7 +53,8 @@
       @(dc/stream-post client
           "/images/create"
           (merge
-            {:query-params params}
+            {:query-params params
+             :timeout -1}
             (when (contains? client :auth-token)
               {:headers {"X-Registry-Auth" (:auth-token client)}})))
       dc/parse-stream)))
@@ -77,6 +78,7 @@
       @(dc/stream-post client
           "/images/create"
           {:query-params params
+           :timeout -1 ;; ignore timeout for long-running requests
            :body (slurp src-path)})
       dc/parse-stream)))
 
@@ -163,7 +165,7 @@
     (response-handler
       @(dc/stream-post client
         (str "/images/" image "/push")
-        (merge {}
+        (merge {:timeout -1}
           ;; add registry only if it was given
           (when-not (nil? registry)
             {:query-params params})
