@@ -8,11 +8,9 @@
                  [com.taoensso/timbre "3.1.2"]
                  [slingshot "0.10.3"]
                  [cheshire "5.2.0"]
-                 [me.raynes/fs "1.4.4"]
-                 [io.netty/netty "3.6.5.Final"]
                  [org.clojure/data.codec "0.1.0"]]
   :plugins [[lein-shell "0.4.0"]
             [lein-midje "3.1.3"]]
   :java-source-paths ["src/java"]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
-                                  [http-kit.fake "0.2.2"]]}})
+                                  [http-kit.fake "0.2.1"]]}})

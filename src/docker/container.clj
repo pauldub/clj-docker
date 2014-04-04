@@ -365,36 +365,4 @@
   (attach-ws client (:Id box) :logs true :stdout true)
 )
 
-(comment
-  ;;TODO: experimental: it's not yet in official docs
-  ;; it requires netty - add it to project.clj
-  (defn attach-ws
-  "attaches to the container's feed via websocket
-  Arguments:
-    client    - an initialized docker's client
-    id        - the id of the container
-  Optional arguments:
-    :logs     - adds logs into response stream, default false
-    :stream   - returns stream, default false
-    :stdin    - if stream=true, adds stdin into stream, default false
-    :stdout   - if logs=true, returns stdout log, default false
-    :stderr   - if logs=true, returns stderr log, default false
-    :output   - where to pop results, have to support pop function
-  Returns:
-    clojure.lang.PersistentQueue
-  Usage:
-    (attach-ws client \"abc123\")"
-  [client id & {:keys [logs, stream, stdin, stdout stderr output]
-                :or {logs false, stream false, stdin false,
-                     stdout false, stderr false,
-                     output (clojure.lang.PersistentQueue/EMPTY)}}]
-  (let [response-handler #(pop output %1)]
-    (dc/stream-ws client
-                (str "/containers/" id "/attach/ws")
-                response-handler
-                {:query-params {:logs logs
-                                :stream stream
-                                :stdin stdin
-                                :stdout stdout
-                                :stderr stderr}})
-    output)))
+
