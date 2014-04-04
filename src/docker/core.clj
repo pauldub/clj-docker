@@ -3,10 +3,8 @@
             [slingshot.slingshot :refer [throw+ try+]]
             [taoensso.timbre :as log]
             [cheshire.core :refer [generate-string]]
-            [clojure.data.codec.base64 :as base64])
-  (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
-                                                       TarArchiveOutputStream
-                                                       TarArchiveEntry)))
+            [clojure.data.codec.base64 :as base64]))
+
 
 (def exceptions
   {500 {:type ::server_error
@@ -54,8 +52,6 @@
     (dc/rpc-get client "/info")
     dc/parse-json))
 
-;;TODO: finish it
-;;after successful authorization it should keep authorization info
 (defn encode-auth-config [auth-config]
   "encodes auth-config map into token"
   (-> auth-config generate-string (.getBytes) base64/encode String.))
@@ -78,9 +74,13 @@
       (fn [body]
         (assoc client :auth-token auth-token)))))
 
-;; aka which part is not yet refactored
 (comment
-
+  ;; which part are not refactored
+  ;; i didnt see any docs where these methods are required
+  ;; or why client should care about compressing and does docker agent accepts it
+  (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
+                                                       TarArchiveOutputStream
+                                                       TarArchiveEntry))
   (defn rpc-post-tar [url file params]
     (let [resp (http/post (str *docker-host* url) {:headers {"Content-Type" "application/tar"}
                                                   :body (slurp file)})]
@@ -102,7 +102,4 @@
       (.finish out)
       (.close out)
       (second (re-find #"Successfully built ([\w\d]+)" (rpc-post-tar "/build" file {:tag tag :remote nil :q quiet}))))
-    ;; (let [dir (str "/" (clojure.string/trim-newline (mktemp "-d")))]
-    ;;   (echo dockerfile {:out (java.io.File. (str dir "/Dockerfile"))})
-    ;;   (println (tar (str dir))))
   )) ;; end of comment

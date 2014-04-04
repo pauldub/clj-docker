@@ -3,8 +3,7 @@
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [slingshot.slingshot :refer [throw+ try+]]
-            [taoensso.timbre :refer (debug warn error)])
-  (:import [org.httpkit.ws WebSocketClient]))
+            [taoensso.timbre :refer (debug warn error)]))
 
 ;; -- JSON PARSERS
 (defn parse-json
@@ -112,12 +111,7 @@
     (http/request
       (build-request-map this
                          :post (to-url this path)
-                         (assoc request-map :as :stream))))
-  WebsocketStream
-  (stream-ws [this path handler] (stream-ws this path handler {}))
-  (stream-ws [this path handler params]
-    (let [ws-url (to-ws-url this path)
-          ws-client (WebSocketClient. ws-url)])))
+                         (assoc request-map :as :stream)))))
 
 (def default-index-url "https://index.docker.io/v1/")
 (def default-client-options {:host "10.0.100.2:4243"

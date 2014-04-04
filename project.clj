@@ -13,4 +13,4 @@
             [lein-midje "3.1.3"]]
   :java-source-paths ["src/java"]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
-                                  [http-kit.fake "0.2.1"]]}})
+                                  [http-kit.fake "0.2.2"]]}})
