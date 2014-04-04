@@ -3,16 +3,13 @@
 [![Build Status](https://travis-ci.org/tauho/clj-docker.svg?branch=master)](https://travis-ci.org/tauho/clj-docker)
 [![Dependency Status](https://www.versioneye.com/user/projects/5335a8fc7bae4bff0f000858/badge.png)](https://www.versioneye.com/user/projects/5335a8fc7bae4bff0f000858)
 
-**NB!** work in progress. Current status it has 95% methods; still needs refactoring and better support for streamed data and with attaching outputs;
+
+An API client for [Docker Remote api](http://docs.docker.io/en/latest/reference/api/docker_remote_api/) v.1.10 written in Clojure.  You can find more comprehensive api reference on this url [http://tauho.github.io/clj-docker](http://tauho.github.io/clj-docker) .
 
 
-A low-level Clojure client of Docker's remote API. Low-level means here:
- 
- * that a client doesnt take a care of threading, you should use core.async or highlevel functions for that;, 
- * returns parsed value if request were successful, otherwise it wires slingshot exceptions
- * it's not SDK and doesnt provide sugarcoated DSL.
+## Install
 
-
+add additional line into project dependencies in your `project.clj` : [docker "0.2.0"] and run a command `lein deps`
 
 ## Quickstart
 
@@ -20,12 +17,13 @@ A low-level Clojure client of Docker's remote API. Low-level means here:
 (require '[docker.core :as docker])
 
 ;; get an information of docker agent 
-(def client (make-client "http://10.0.1.2:4243"))
+(def client (make-client "10.0.1.2:4243"))
 (docker/version client)
 (docker/info client)
 
 ;; manage docker images
 (require '[docker.image :as image])
+
 (image/show-all client)
 (image/search client "tiny-haproxy")
 (image/create client "lapax/tiny-haproxy")
@@ -33,9 +31,10 @@ A low-level Clojure client of Docker's remote API. Low-level means here:
 
 ;; manage docker containers
 (require '[docker.container :as container])
+
 (container/show-all client)
 (println container/default-container-config);; which keywords are supported
-(container/create client "docker1" {:Hostname "test-docker", :Memory 0})
+(container/create client {:Hostname "test-docker", :Memory "1g"})
 (container/inspect client "container-id")
 (container/start client "container-id")
 (container/top client "container-id") 
@@ -44,11 +43,22 @@ A low-level Clojure client of Docker's remote API. Low-level means here:
 ```
 
 
+## Testing
+
+Project has 2 kinds of tests : 
+
+* docker.mocks.* - tests with stubbed responses. It requires [http-kit-fake ">0.2.2"] which have a workaround to stub webrequests for `httpkit.client/request` function. run these specs by command `$> lein with-profile dev midje docker.mocks.*`  
+
+* docker.v0x90   - will include tests running against real docker v0.9, it requires that you've installed vagrant and ansible. 
+
+## License
+
+It's Released under the MIT license. See [LICENSE](https://github.com/pauldub/clj-docker/blob/master/LICENSE) for the full license.
+
+	
 ## TODO
 
-- remove TODOs in code
-- Write additional tests for v0.9
-- Write doc.
-- doc with func references
-- doc for contributors
-- doc how to set up test-machines and over nginx
+- Write additional tests for docker v0.9
+- Write docs for human as [ClojureWerkz](http://clojurewerkz.org/) has.
+- Test on battlefield.
+- add [stuartsierra/component](https://github.com/stuartsierra/component) pattern for containers(?)

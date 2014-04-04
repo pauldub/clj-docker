@@ -3,7 +3,7 @@
   :url "https://github.com/pauldub/clj-docker"
   :license {:name "MIT License"
             :url "http://choosealicense.com/licenses/mit"}
-  :dependencies [[org.clojure/clojure "1.5.1"]
+  :dependencies [[org.clojure/clojure "1.6.0"]
                  [http-kit "2.1.18"]
                  [com.taoensso/timbre "3.1.2"]
                  [slingshot "0.10.3"]
