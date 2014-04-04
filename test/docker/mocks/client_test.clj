@@ -1,11 +1,10 @@
 "Tests for docker.client."
 
-(ns docker.client-test
+(ns docker.mocks.client-test
   (:require [midje.sweet :refer :all]
             [midje.config :as config]
-            [docker.client :refer :all :as client]
+            [docker.client :refer :all]
             [org.httpkit.fake :refer (with-fake-http)]))
-
 
 (def default-host "http://httpbin.org")
 
@@ -22,8 +21,8 @@
 (facts "HTTPKitClient and JSONParser"
   (fact "parses correct string correctly"
     (let [tor (make-client default-host)]
-      (parse-json tor "[1,2,3]") => [1,2,3]
-      (parse-json tor "{\n  \"origin\": \"84.248.1.138\"\n}") => {:origin "84.248.1.138"})))
+      (parse-json "[1,2,3]") => [1,2,3]
+      (parse-json "{\n  \"origin\": \"84.248.1.138\"\n}") => {:origin "84.248.1.138"})))
 
 (facts "HTTPKitClient get method"
   (let [tor (make-client default-host)]

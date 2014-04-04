@@ -1,4 +1,4 @@
-(ns docker.mocked-image
+(ns docker.mocks.image-test
   (:require [midje.sweet :refer :all]
             [midje.config :as config]
             [org.httpkit.client :as http]

@@ -1,4 +1,4 @@
-(ns docker.mocked-container
+(ns docker.mocks.container-test
   (:refer-clojure :exclude [remove])
   (:require [midje.sweet :refer :all]
             [midje.config :as config]

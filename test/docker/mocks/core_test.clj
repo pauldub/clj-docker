@@ -1,4 +1,4 @@
-(ns docker.mocked-core
+(ns docker.mocks.core-test
   (:require [midje.config :as config]
             [org.httpkit.client :as http]
             [org.httpkit.fake :refer [with-fake-http]]
