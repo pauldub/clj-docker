@@ -26,16 +26,16 @@
           (count images) => 1
           (-> images first :Id) => "x1")))))
 
-(facts "create new image"
+(facts "creates new image by downloading it from registry"
   (let [docker (make-client default-host)
-        test-file "/tmp/docker-create-image"
+        response-file "/tmp/docker-create-image"
         resp1 (generate-stream [{:status "Pulling"}
                                 {:status "Pulling"}
                                 {:status "Done"}]
-                               (io/writer test-file))]
+                               (io/writer response-file))]
     (fact "using plain settings imports correct data"
       (with-fake-http [#"/images/create$" {:status 200
-                                           :body (.getBytes (slurp test-file) "utf8")}]
+                                           :body (.getBytes (slurp response-file) "utf8")}]
         (let [msgs (create docker "test/image")]
           (first msgs)  => {:status "Pulling"}
           (second msgs) => {:status "Pulling"}
@@ -45,6 +45,27 @@
       (with-fake-http [#"/images/create$" {:status 500
                                            :body "server down"}]
         (create docker "test/kaputt") => (throws Exception)))))
+
+(facts "creates a new image by uploading it"
+  (let [client (make-client default-host)
+        response-file "/tmp/docker-create-image-response"
+        resp1 (generate-stream [{:status "Uploading"}
+                                {:status "Uploading", :progress "1/100"}
+                                {:status "Done"}]
+                               (io/writer response-file))
+        test-file "/tmp/docker-create-image"]
+    ;; add some content into test file
+    (spit test-file "kikka kukka")
+    (fact "gets correct response after successful upload"
+      (with-fake-http [#"/images/create" {:status 200
+                                          :body (.getBytes (slurp response-file) "utf8")}]
+        (let [msgs (create-from-src client test-file)]
+          (first msgs)  => {:status "Uploading"}
+          (second msgs) => {:status "Uploading" :progress "1/100"}
+          (nth msgs 2)  => {:status "Done"})))
+    (fact "raises exception if server returns failure code"
+      (with-fake-http [#"/images/create" {:status 500}]
+        (create-from-src client test-file) => (throws Exception)))))
 
 (facts "delete an image"
   (let [docker (make-client default-host)]

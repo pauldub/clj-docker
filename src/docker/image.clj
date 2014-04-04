@@ -32,23 +32,19 @@
     (dc/rpc-get client "/images/json" {:query-params {:all all}})
     dc/parse-json))
 
-;;TODO: finish authorization
-;;TODO: add support for from-src
 (defn create
-  "Creates an new image, either by pull it from the registry or importing it from file.
+  "Creates an new image by pulling source from index.
   Arguments:
     client - initialized docker client
     image - name of docker image
   Optional arguments:
-    :from-src - import docker image from file
     :repo - name of repository
     :tag - image's tag
     :registry - to specify url
   Usage:
     (create client \"registry\")
-    (create client \"registry\" :tag \"latest\")
-  "
-  [client image & {:keys [from-src repo tag registry]}]
+    (create client \"registry\" :tag \"latest\")"
+  [client image & {:keys [repo tag registry]}]
   (let [params {:fromImage image
                 :repo repo
                 :tag tag
@@ -60,6 +56,28 @@
             {:query-params params}
             (when (contains? client :auth-token)
               {:headers {"X-Registry-Auth" (:auth-token client)}})))
+      dc/parse-stream)))
+;;TODO: http-kit isnt very good with large-files - add tests
+(defn create-from-src
+  "Creates an new image by uploading a source of image file from
+  client side.
+  Arguments:
+    client    - an initialized docker client
+    src-path  - a path where to find the source file
+  Optional arguments:
+    :tag  - a tag of image
+    :repo -  a name of repository
+  Usage:
+    (create-from-src client \"/tmp/ubuntu.img\")"
+  [client src-path & {:keys [tag repo]}]
+  (let [params {:fromSrc src-path ;; docker-py uses "-" , implications?
+                :tag tag
+                :repo repo}]
+    (response-handler
+      @(dc/stream-post client
+          "/images/create"
+          {:query-params params
+           :body (slurp src-path)})
       dc/parse-stream)))
 
 (defn delete
