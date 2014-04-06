@@ -1,180 +1,105 @@
 (ns docker.core
-  (:require [org.httpkit.client :as http]
-            [clojure.java.io :as io]
-            aleph.formats
-            [cheshire.core :refer :all])
+  (:require [docker.client :as dc]
+            [slingshot.slingshot :refer [throw+ try+]]
+            [taoensso.timbre :as log]
+            [cheshire.core :refer [generate-string]]
+            [clojure.data.codec.base64 :as base64]))
+
+
+(def exceptions
+  {500 {:type ::server_error
+        :message "Fatal error in Docker agent."}
+   :uf {:type ::unspecified_error
+        :message "Unspecified error. Probably timeout exception due wrong URl."}})
+
+(def make-client dc/make-client)
+(def response-handler (dc/make-response-handler exceptions))
+
+(defn version
+  "Shows the docker version used on host.
+  Usage:
+    (def docker (make-client))
+    (version docker)"
+  [client]
+  (response-handler
+    (dc/rpc-get client "/version")
+    dc/parse-json))
+
+(defn events
+  "Gets events from dockers - when since is unspecified then returns events for last 10s
+  New! Works with docker(>0.9)
+  usage:
+    (events docker) ;; returns events from last 10 seconds
+    (events docker 10030300) ;; returns events since unix time;
+    (def now (-> (System/currentTimeMillis) (/ 1000) int)
+    (events docker (- now 10))"
+  ([client]
+    (let [timeago 10 ;; 10 seconds
+          current-epoch (-> (System/currentTimeMillis) (/ 1000) int)
+          since (- current-epoch timeago)]
+      (events client (- current-epoch since))))
+  ([client since]
+    (response-handler
+      (dc/rpc-get client "/events" {:query-params {:since since}})
+      dc/parse-json)))
+
+(defn info
+  "displays system-wide information
+  Usage:
+    (info docker)"
+  [client]
+  (response-handler
+    (dc/rpc-get client "/info")
+    dc/parse-json))
+
+(defn encode-auth-config [auth-config]
+  "encodes auth-config map into token"
+  (-> auth-config generate-string (.getBytes) base64/encode String.))
+
+(defn authorize
+  "check auth configuration
+  Returns client which have authorization info."
+  [client username password email]
+  (let [auth-config {:username username
+                     :password password
+                     :email email
+                     :serveraddress (:index-url client)}
+        auth-token (encode-auth-config auth-config)]
+    (response-handler
+      (dc/rpc-post
+        client "/auth"
+        {:body (generate-string auth-config)
+         :debug true})
+      ;; when authorization data was correct, add it to client
+      (fn [body]
+        (assoc client :auth-token auth-token)))))
+
+(comment
+  ;; which part are not refactored
+  ;; i didnt see any docs where these methods are required
+  ;; or why client should care about compressing and does docker agent accepts it
   (:import  (org.apache.commons.compress.archivers.tar TarArchiveInputStream
                                                        TarArchiveOutputStream
-                                                       TarArchiveEntry)))
+                                                       TarArchiveEntry))
+  (defn rpc-post-tar [url file params]
+    (let [resp (http/post (str *docker-host* url) {:headers {"Content-Type" "application/tar"}
+                                                  :body (slurp file)})]
+      (if (or (= 200 (:status @resp)) (= 201 (:status @resp)))
+        (:body @resp)
+        (println (:status @resp) (:reason @resp)))))
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
-
-(def ^:dynamic *docker-host* "http://127.0.0.1:4243")
-
-(defn set-docker-host!
-  [^java.lang.String host]
-  (alter-var-root (var *docker-host*) (fn [_] host)))
-
-(defn rpc-get [url & [params]]
-  (let [resp (http/get (str *docker-host* url) {:query-params params})]
-    (if (= 200 (:status @resp))
-      (parse-string (:body @resp) true))))
-
-(defn rpc-get-stream [url & [params]]
-  (let [resp (http/get (str *docker-host* url) {:as :stream :query-params params})]
-    (if (= 200 (:status @resp))
-      (parse-stream (io/reader (:body @resp)) true))))
-
-(defn rpc-post [url & [params]]
-  (let [resp (http/post (str *docker-host* url) {:form-params params})]
-    (if (= 200 (:status @resp))
-      (parse-string (:body @resp) true))))
-
-(defn rpc-post-json [url params]
-  (println (generate-string (into {} (remove (comp nil? val) params))))
-  (let [resp (http/post (str *docker-host* url) {:headers {"Content-Type" "application/json"}
-                                                 :body (generate-string (into {} (remove (comp nil? val) params)))})]
-    (if (or (= 200 (:status @resp)) (= 201 (:status @resp)))
-      (parse-string (:body @resp) true)
-      (println (:status @resp) (:reason @resp)))))
-
-(defn rpc-post-tar [url file params]
-  (let [resp (http/post (str *docker-host* url) {:headers {"Content-Type" "application/tar"}
-                                                 :body (slurp file)})]
-    (if (or (= 200 (:status @resp)) (= 201 (:status @resp)))
-      (:body @resp)
-      (println (:status @resp) (:reason @resp)))))
-
-(defn rpc-post-stream [url & [params]]
-  (let [resp (http/post (str *docker-host* url) {:as :stream :form-params params})]
-    (if (= 200 (:status @resp))
-      (parse-stream (io/reader (:body @resp)) true))))
-
-(defn rpc-delete [url & params]
-  (let [resp (http/delete (str *docker-host* url) {:query-params params})]
-    (if (= 200 (:status @resp))
-      (parse-string (:body @resp) true))))
-
-(defn attach [container]
-  (let [resp (rpc-post-stream (str "/containers/" container "/attach")
-                              {"stdout" 1
-                               "stderr" 1
-                               "stream" 1})]
-    (println resp)))
-
-(defn build [{:keys [path tag quiet dockerfile]
-              :or {:tag nil :quite false}}]
-  (let [tmpfile (java.io.File/createTempFile "build" "tar")
-        file (clojure.java.io/file tmpfile)
-        entry (TarArchiveEntry. "Dockerfile")
-        out (TarArchiveOutputStream. (clojure.java.io/output-stream file))
-        buf (byte-array (map byte dockerfile))]
-    (.setSize entry (count buf))
-    (.putArchiveEntry out entry)
-    (.write out buf 0 (count buf))
-    (.closeArchiveEntry out)
-    (.finish out)
-    (.close out)
-    (second (re-find #"Successfully built ([\w\d]+)" (rpc-post-tar "/build" file {:tag tag :remote nil :q quiet}))))
-  ;; (let [dir (str "/" (clojure.string/trim-newline (mktemp "-d")))]
-  ;;   (echo dockerfile {:out (java.io.File. (str dir "/Dockerfile"))})
-  ;;   (println (tar (str dir))))
-  
-  )
-
-(defn commit [{:keys [container repository tag message author conf]}]
-  "TODO")
-
-(defn containers []
-  (rpc-get "/containers/json"))
-
-(defn create-container [{:keys [image command hostname user detach stdin-open tty mem-limit
-                                ports environment dns volumes volumes-from]
-                         :or {:hostname nil :user nil :detach false :stdin-open false
-                              :tty false :mem-limit 0 :ports [] :environment []
-                              :dns [] :volumes nil :volumes-from nil}}]
-  (let [container {:Hostname hostname
-                   :PortSpecs ports
-                   :User user
-                   :Tty tty
-                   :OpenStdin stdin-open
-                   :Memory mem-limit
-                   :AttachStdin false
-                   :AttachStdout false
-                   :AttachStderr false                  
-                   :Env [environment]
-                   :Cmd command
-                   :Dns [dns]
-                   :Image image
-                   :Volumes volumes
-                   :VolumesFrom volumes-from}]
-    (rpc-post-json "/containers/create" container)))
-
-(defn diff [container]
-  (rpc-get (str "/containers/" container "/changes")))
-
-(defn export [container]
-  (rpc-get-stream (str "/containers/" container "/export")))
-
-(defn history [image]
-  (rpc-get (str "/images/" image "/history")))
-
-(defn images [& {:keys [name quiet viz]
-                 :or {:name nil :quiet false :viz false}}]
-  (if (true? viz)
-    (rpc-get "/images/viz")
-    (rpc-get "/images/json" {:filter name :only_ids 0 :all 1})))
-
-
-(defn import-image [{:keys [src repository tag]
-                     :or {:repository nil :tag nil}
-                     :as params}]
-  (rpc-post "/images/create" {:fromSrc src :repo repository :tag tag}))
-
-(defn info []
-  (rpc-get "/info"))
-
-(defn insert [image url path]
-  (rpc-post (str "/images/" image "/insert") {:url url :path path}))
-
-(defn inspect-container [container]
-  (rpc-get (str "/containers/" container "/json")))
-
-(defn inspect-image [image]
-  (rpc-get (str "/images/" image "/json")))
-
-(defn kill [containers]
-  (let [urls (map #(str "/containers/" %1 "/kill") containers)
-        futures (doall (map rpc-post urls))]
-    (doseq [resp futures]
-      (println resp))))
-
-(defn login [{:keys [username password email]
-              :or {:password nil :email nil}
-              :as params}]
-  (rpc-post "/auth" params))
-
-(defn remove-container [container]
-  (rpc-delete (str "/containers/" container)))
-
-(defn remove-image [image]
-  (rpc-delete (str "/images/" image)))
-
-(defn search [term]
-  (rpc-get "/images/search" {:term term}))
-
-(defn start [container & ports]
-  (rpc-post (str "/containers/" container "/start") {:Binds ports}))
-
-(defn stop [container]
-  (rpc-post (str "/containers/" container "/stop")))
-
-(defn tag [] "TODO")
-
-(defn version []
-  (rpc-get "/version"))
-
-(defn wait [] "TODO")
+  (defn build [{:keys [path tag quiet dockerfile]
+                :or {:tag nil :quite false}}]
+    (let [tmpfile (java.io.File/createTempFile "build" "tar")
+          file (clojure.java.io/file tmpfile)
+          entry (TarArchiveEntry. "Dockerfile")
+          out (TarArchiveOutputStream. (clojure.java.io/output-stream file))
+          buf (byte-array (map byte dockerfile))]
+      (.setSize entry (count buf))
+      (.putArchiveEntry out entry)
+      (.write out buf 0 (count buf))
+      (.closeArchiveEntry out)
+      (.finish out)
+      (.close out)
+      (second (re-find #"Successfully built ([\w\d]+)" (rpc-post-tar "/build" file {:tag tag :remote nil :q quiet}))))
+  )) ;; end of comment

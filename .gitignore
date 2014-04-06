@@ -2,6 +2,8 @@
 /target
 /classes
 /checkouts
+/.vagrant
+*/.vagrant/
 pom.xml
 pom.xml.asc
 *.jar

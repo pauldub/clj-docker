@@ -1,0 +1,9 @@
+---
+- name: update package list
+  shell: apt-get -y update
+- name: install backported kernels
+  apt: pkg={{ item }} state=installed
+  with_items:
+    - linux-image-generic-lts-raring
+    - linux-headers-generic-lts-raring
+

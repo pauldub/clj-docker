@@ -1,0 +1,19 @@
+---
+  - name: install prerequirements
+    apt: pkg={{ item }} state=latest
+    with_items:
+      - python-apt
+      - python-pycurl
+      - python-pip
+
+  - name: add nginx repository
+    apt_repository: repo='ppa:nginx/stable'
+
+  - name: update package list
+    command: apt-get -y update
+
+  - name: install nginx
+    apt: pkg=nginx state=latest
+
+  - name: add vagrant into www-data group
+    shell: "usermod -a -G www-data vagrant"
