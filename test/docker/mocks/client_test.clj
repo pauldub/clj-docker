@@ -11,11 +11,11 @@
 (facts "HTTPKitClient constructor"
   (fact "creates constructor for given host"
     (let [tor (make-client default-host)]
-      (:host tor) => default-host
+      (str (:host tor)) => default-host
       (-> tor :client-options :timeout) => 1000))
   (fact "creates constructor and sets client options"
     (let [tor (make-client default-host {:timeout 2000})]
-      (:host tor) => default-host
+      (str (:host tor)) => default-host
       (get-in tor [:client-options :timeout]) => 2000)))
 
 (facts "HTTPKitClient and JSONParser"
@@ -39,5 +39,3 @@
           body => "10.0.0.2"
           error => nil
           (-> resp :opts :query-params) => {"a" 1})))))
-
-

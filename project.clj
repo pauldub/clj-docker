@@ -4,10 +4,11 @@
   :license {:name "MIT License"
             :url "http://choosealicense.com/licenses/mit"}
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [http-kit "2.1.18"]
+                 [http-kit "2.1.19"]
                  [com.taoensso/timbre "3.1.2"]
+                 [com.cemerick/url "0.1.1"]
                  [slingshot "0.10.3"]
-                 [cheshire "5.2.0"]
+                 [cheshire "5.3.1"]
                  [org.clojure/data.codec "0.1.0"]]
   :plugins [[lein-shell "0.4.0"]
             [lein-midje "3.1.3"]
