@@ -1,4 +1,4 @@
-(defproject docker "0.2.0"
+(defproject docker "0.2.1-SNAPSHOT"
   :description "A work in progress docket API client"
   :url "https://github.com/pauldub/clj-docker"
   :license {:name "MIT License"
