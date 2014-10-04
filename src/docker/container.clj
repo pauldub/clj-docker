@@ -46,7 +46,7 @@
 
     (response-handler
       (dc/rpc-get client
-        "/containers/json"
+        "containers/json"
         {:query-params params})
       dc/parse-json)))
 
@@ -93,7 +93,7 @@
     (let [request-data (create-config user-configs)]
       (response-handler
         (dc/rpc-post client
-          "/containers/create"
+          "containers/create"
           (merge
             {:body (generate-string request-data)}
             ;; if requested, add container name into query-params
@@ -113,7 +113,7 @@
   [client container-id]
   (response-handler
     (dc/rpc-get client
-      (str "/containers/" container-id  "/json"))
+      (str "containers/" container-id  "/json"))
     dc/parse-json))
 
 (defn top
@@ -129,7 +129,7 @@
   (let [params {:ps_args ps_args}]
     (response-handler
       (dc/rpc-get client
-        (str "/containers/" container-id "/top")
+        (str "containers/" container-id "/top")
         {:query-params params})
       dc/parse-json)))
 
@@ -143,7 +143,7 @@
   [client container-id]
   (response-handler
     (dc/rpc-get client
-      (str "/containers/" container-id "/changes"))
+      (str "containers/" container-id "/changes"))
     dc/parse-json))
 
 (defn export
@@ -160,7 +160,7 @@
   [client id file-path]
   (response-handler
     @(dc/stream-get client
-      (str "/containers/" id "/export"))
+      (str "containers/" id "/export"))
     (fn [body] (dc/save-stream body (str file-path "/" id)))))
 
 (def default-start-configuration
@@ -190,7 +190,7 @@
     (let [config_ (merge default-start-configuration config)]
       (response-handler
         (dc/rpc-post client
-          (str "/containers/" id "/start")
+          (str "containers/" id "/start")
           (merge
             {:body (generate-string config_)}
             (when-not (nil? host-config)
@@ -211,7 +211,7 @@
   ([client id timeout]
     (response-handler
       (dc/rpc-post client
-        (str "/containers/" id "/stop")
+        (str "containers/" id "/stop")
         (merge
           {}
           (when-not (nil? timeout)
@@ -232,7 +232,7 @@
   ([client id timeout]
     (response-handler
       (dc/rpc-post client
-        (str "/containers/" id "/restart")
+        (str "containers/" id "/restart")
         (merge
           {}
           (when-not (nil? timeout)
@@ -250,7 +250,7 @@
   [client id]
   (response-handler
     (dc/rpc-post client
-      (str "/containers/" id "/kill")
+      (str "containers/" id "/kill")
       {})
     (fn [body] true)))
 
@@ -264,7 +264,7 @@
   [client id]
   (response-handler
     (dc/rpc-post client
-      (str "/containers/" id "/wait")
+      (str "containers/" id "/wait")
       {})
     dc/parse-json))
 
@@ -283,7 +283,7 @@
   [client id & {:keys [volumes force] :or {volumes false, force false}}]
   (response-handler
     (dc/rpc-delete client
-      (str "/containers/" id)
+      (str "containers/" id)
       {:query-params {:v volumes, :force force}})
     (fn [body] true)))
 
@@ -305,7 +305,7 @@
         request {:Resource src-path}]
     (response-handler
       @(dc/stream-post client
-        (str "/containers/" id "/copy")
+        (str "containers/" id "/copy")
         {:body (generate-string request)})
       (fn [body] (dc/save-stream body file-fullpath)))))
 
@@ -336,7 +336,7 @@
                 :stderr stderr}]
     (response-handler
       @(dc/stream-post client
-        (str "/containers/" id "/attach")
+        (str "containers/" id "/attach")
         {:query-params params})
       (fn [body] (clojure.java.io/reader body)))))
 
@@ -364,5 +364,3 @@
   (attach client (:Id box) :logs true :stdout true)
   (attach-ws client (:Id box) :logs true :stdout true)
 )
-
-

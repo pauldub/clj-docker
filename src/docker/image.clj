@@ -29,7 +29,7 @@
     (show-all client :all 10)"
   [client & {:keys [all] :or {all 0}}]
   (response-handler
-    (dc/rpc-get client "/images/json" {:query-params {:all all}})
+    (dc/rpc-get client "images/json" {:query-params {:all all}})
     dc/parse-json))
 
 (defn create
@@ -51,7 +51,7 @@
                 :registry registry}]
     (response-handler
       @(dc/stream-post client
-          "/images/create"
+          "images/create"
           (merge
             {:query-params params
              :timeout -1}
@@ -76,7 +76,7 @@
                 :repo repo}]
     (response-handler
       @(dc/stream-post client
-          "/images/create"
+          "images/create"
           {:query-params params
            :timeout -1 ;; ignore timeout for long-running requests
            :body (slurp src-path)})
@@ -95,7 +95,7 @@
   (let [params {:force force}]
     (response-handler
       (dc/rpc-delete client
-        (str "/images/" image-name)
+        (str "images/" image-name)
         {:query-params params})
       (fn [body] true))))
 
@@ -114,7 +114,7 @@
   (let [params {:url url, :path path}]
     (response-handler
       @(dc/stream-post client
-         (str "/images/" image "/insert")
+         (str "images/" image "/insert")
          {:query-params params})
       dc/parse-stream)))
 
@@ -130,7 +130,7 @@
   [client image]
   (response-handler
     (dc/rpc-get client
-      (str "/images/" image "/json"))
+      (str "images/" image "/json"))
     dc/parse-json))
 
 (defn history
@@ -145,7 +145,7 @@
   [client image]
   (response-handler
     (dc/rpc-get client
-      (str "/images/" image "/history"))
+      (str "images/" image "/history"))
     dc/parse-json))
 
 (defn push
@@ -164,7 +164,7 @@
   (let [params {:registry registry}]
     (response-handler
       @(dc/stream-post client
-        (str "/images/" image "/push")
+        (str "images/" image "/push")
         (merge {:timeout -1}
           ;; add registry only if it was given
           (when-not (nil? registry)
@@ -192,7 +192,7 @@
   (let [params {:repo repo, :force force}]
     (response-handler
       (dc/rpc-get client
-        (str "/images/" image "/tag")
+        (str "images/" image "/tag")
         {:query-params params})
       (fn [body] true))))
 
@@ -209,6 +209,6 @@
   (let [params {:term search-term}]
     (response-handler
       (dc/rpc-get client
-        (str "/images/search")
+        (str "images/search")
         {:query-params params})
       dc/parse-json)))

@@ -22,7 +22,7 @@
     (version docker)"
   [client]
   (response-handler
-    (dc/rpc-get client "/version")
+    (dc/rpc-get client "version")
     dc/parse-json))
 
 (defn events
@@ -40,7 +40,7 @@
       (events client (- current-epoch since))))
   ([client since]
     (response-handler
-      (dc/rpc-get client "/events" {:query-params {:since since}})
+      (dc/rpc-get client "events" {:query-params {:since since}})
       dc/parse-json)))
 
 (defn info
@@ -49,7 +49,7 @@
     (info docker)"
   [client]
   (response-handler
-    (dc/rpc-get client "/info")
+    (dc/rpc-get client "info")
     dc/parse-json))
 
 (defn encode-auth-config [auth-config]
@@ -67,7 +67,7 @@
         auth-token (encode-auth-config auth-config)]
     (response-handler
       (dc/rpc-post
-        client "/auth"
+        client "auth"
         {:body (generate-string auth-config)
          :debug true})
       ;; when authorization data was correct, add it to client

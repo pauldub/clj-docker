@@ -3,6 +3,7 @@
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [slingshot.slingshot :refer [throw+ try+]]
+            [cemerick.url :refer (url url-encode)]
             [taoensso.timbre :refer (debug warn error)]))
 
 ;; -- JSON PARSERS
@@ -78,13 +79,18 @@
 (defrecord HTTPKitClient [host version client-options index-url]
   URLBuilder
   (to-url [this path]
-    (format "http://%s/%s%s" (:host this) (:version this) path))
+    (-> host
+        (url version path)
+        (assoc :protocol "http")
+        str))
   (to-ws-url [this path]
-    (to-ws-url this path nil))
+    (to-ws-url this path {}))
   (to-ws-url [this path query-options]
-    (let [params (stringify-options query-options)]
-      (str "ws://" (:host this) "/" (:version this)
-           (when-not (empty? params) (str "?" params)))))
+    (-> host
+        (url version path)
+        (assoc :protocol "ws"
+               :query query-options)
+        str))
   RPC
   (rpc-get [this path]
     (rpc-get this path nil))
@@ -133,6 +139,13 @@
           (get exceptions status (:uf exceptions))
           {:content body :error error :status status})))))
 
+(defn- create-url
+  [client-url]
+  (try
+    (url client-url)
+    (catch java.net.MalformedURLException _
+      (url (str "http://" client-url)))))
+
 (defn make-client
   "Creates new client to access Docker agent.
   Arguments:
@@ -149,8 +162,7 @@
   ([host client-opts & {:keys [index-url version]
                         :or {index-url default-index-url
                              version "v1.10"}}]
-    (HTTPKitClient. host
+    (HTTPKitClient. (create-url host)
                     version
                     (merge default-client-options client-opts)
                     index-url)))
-
