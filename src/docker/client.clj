@@ -81,7 +81,6 @@
   (to-url [this path]
     (-> host
         (url version path)
-        (assoc :protocol "http")
         str))
   (to-ws-url [this path]
     (to-ws-url this path {}))
